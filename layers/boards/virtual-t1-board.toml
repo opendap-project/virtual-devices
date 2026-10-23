@@ -24,7 +24,7 @@ args = [
   "-drive", "if=none,id=system,format=qcow2,file={run.disk}",
   "-device", "virtio-blk-pci,drive=system,addr=0x2,bootindex=0",
   # Management link (the cable to a computer): SSH on the host's loopback.
-  "-netdev", "user,id=net0,hostfwd=tcp:127.0.0.1:{run.ssh_port}-:22", "-device", "virtio-net-pci,netdev=net0",
+  "-netdev", "user,id=net0,hostfwd=tcp:127.0.0.1:{run.ssh_port}-:22", "-device", "virtio-net-pci,netdev=net0,mac=52:54:00:0d:a1:00",
   # USB-C in host mode: hot-plugged drives and audio devices (odap-vdev usb).
   "-device", "qemu-xhci,id=xhci", "-audiodev", "{host.audio},id=usbsnd",
   # microSD socket, empty until a card is inserted (odap-vdev sd).

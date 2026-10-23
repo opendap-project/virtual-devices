@@ -1,0 +1,15 @@
+# Virtual T1 management link (the cable to a computer; QEMU user-mode network, MAC set by the
+# virtual board). It reaches the internet too, but only as a fallback: the LAN NIC, which stands
+# for the T1's Wi-Fi, carries the default route when it is up.
+[Match]
+MACAddress=52:54:00:0d:a1:00
+
+[Network]
+DHCP=yes
+MulticastDNS=no
+
+[DHCPv4]
+RouteMetric=2048
+
+[IPv6AcceptRA]
+RouteMetric=2048
