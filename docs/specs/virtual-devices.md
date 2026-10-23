@@ -24,7 +24,7 @@
 | `models/` | `virtual-t1`: its identity, and one layer per kind |
 | `bin/odap-vdev` | The tool, one domain per subcommand: `models`, `describe`, `start [--window] [--wait]`, `stop`, `reboot [--debug]`, `status [--json]`, `ssh`, `console`, `screen capture`, `input press ROLE / tap / swipe`, `usb list / plug / unplug`, `sd insert / eject`, `power battery / charger` |
 | `lib/odap_vdev/` | Its modules: `compose` (model and layers to description and QEMU arguments), `instance` (one running device), `qmp`, `workspace` (other repositories through `repos.tsv`), `cli` |
-| `export/bsp/` | The virtual board's support package for Blackbird OS images: the description from fw_cfg, the USB device port |
+| `export/bsp/` | The virtual board's support package for Blackbird OS images (a mkosi config directory): the description from fw_cfg, the network links, the USB device port, the initrd's drivers |
 
 **Rules:**
 
