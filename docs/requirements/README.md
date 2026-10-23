@@ -9,7 +9,7 @@ Requirements for the virtual OpenDAP devices that run on a developer host.
 | VD-003 | A virtual device shall have network access, to the local network and to the internet. | must | Confirmed |
 | VD-004 | Virtual devices shall live in their own repository, separate from the toolkit and from the operating system. | must | Confirmed |
 | VD-005 | A virtual device shall be organised by its hardware: a combination of hardware layers (SoC, board, components, faceplate, HATs), with the device model defined on top of that combination. | must | Confirmed |
-| VD-006 | Everything that lets a device be emulated on the host during development shall be provided, for every requirement, as far as possible; what cannot be emulated is shown by the toolkit (toolkit-cli TK-012). | must | Confirmed |
+| VD-006 | Everything that lets a device be emulated on the host during development shall be provided, for every requirement, as far as possible; what cannot be emulated is shown by the toolkit (cli TK-018). | must | Confirmed |
 | VD-007 | The window of a virtual device shall always open at the right size, and keep it while the device boots. | must | Confirmed |
 
 ## Context

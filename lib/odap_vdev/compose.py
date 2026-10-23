@@ -1,29 +1,26 @@
-#!/usr/bin/env python3
 """Compose a virtual device from its model: the QEMU arguments of its hardware layers and its device
 description (opendap.device-description/v1), which the virtual board hands to the guest.
 
-  vdev.py models                         the models, one per line: id<TAB>name<TAB>file
-  vdev.py description MODEL              the device description, as TOML
-  vdev.py qemu-args MODEL [KEY=VALUE…]   QEMU arguments, one per line; KEY=VALUE fills run-time
-                                         values (run.disk, run.ssh_port, host.audio)
-
-MODEL is a model file's stem (virtual-t1) or path. A model names one layer per kind (soc, board,
-faceplate, hats); each layer contributes its [qemu] args and its part of the description.
-Exit status: 0 on success, 2 on a usage or data error (message on stderr).
+A model names one layer per kind (soc, board, faceplate, hats); each layer contributes its [qemu]
+args and its part of the description. Run-time values fill {run.*} and {host.*} templates.
 """
 import pathlib
 import re
-import sys
 import tomllib
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 SCHEMA = "opendap.device-description/v1"
+# Control fields the runner uses and the description leaves out.
+RUNNER_ONLY = {"qcode"}
 KINDS = {"soc": "soc", "board": "boards", "faceplate": "faceplates", "hats": "hats"}
 
 
+class CompositionError(Exception):
+    pass
+
+
 def fail(msg):
-    print(f"vdev: {msg}", file=sys.stderr)
-    sys.exit(2)
+    raise CompositionError(msg)
 
 
 def load(path):
@@ -39,7 +36,7 @@ def model_path(name):
         return p
     p = ROOT / "models" / f"{name}.toml"
     if not p.exists():
-        fail(f"no model {name!r} (see: vdev.py models)")
+        fail(f"no model {name!r} (see: odap-vdev models)")
     return p
 
 
@@ -97,33 +94,29 @@ def description(model):
         if "display" in layer:
             lines += ["", "[display]"] + [f"{k} = {toml_value(v)}" for k, v in layer["display"].items()]
         for control in layer.get("controls", []):
-            lines += ["", "[[controls]]"] + [f"{k} = {toml_value(v)}" for k, v in control.items()]
+            lines += ["", "[[controls]]"] + [f"{k} = {toml_value(v)}" for k, v in control.items() if k not in RUNNER_ONLY]
     return "\n".join(lines) + "\n"
 
 
-def main(argv):
-    if not argv or argv[0] in ("-h", "--help"):
-        print(__doc__.strip())
-        return 0
-    cmd, rest = argv[0], argv[1:]
-    if cmd == "models":
-        for p in sorted((ROOT / "models").glob("*.toml")):
-            m = load(p)["model"]
-            print(f"{m['id']}\t{m['name']}\t{p.relative_to(ROOT)}")
-    elif cmd == "description" and len(rest) == 1:
-        sys.stdout.write(description(load(model_path(rest[0]))))
-    elif cmd == "qemu-args" and rest:
-        runtime = {}
-        for kv in rest[1:]:
-            k, sep, v = kv.partition("=")
-            if not sep:
-                fail(f"expected KEY=VALUE, got {kv!r}")
-            runtime[k] = v
-        print("\n".join(qemu_args(load(model_path(rest[0])), runtime)))
-    else:
-        fail(f"unknown command or arguments: {' '.join(argv)} (see: vdev.py --help)")
-    return 0
+def models():
+    """(id, name, stem) of every model."""
+    return [(load(p)["model"]["id"], load(p)["model"]["name"], p.stem) for p in sorted((ROOT / "models").glob("*.toml"))]
 
 
-if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+def controls(model):
+    """The model's controls with their roles and QEMU keys, for input injection."""
+    return [c for layer in layers(model) for c in layer.get("controls", [])]
+
+
+def display(model):
+    for layer in layers(model):
+        if "display" in layer:
+            return layer["display"]
+    return None
+
+
+def storage_gb(model):
+    for layer in layers(model):
+        if "board" in layer and "storage_gb" in layer["board"]:
+            return layer["board"]["storage_gb"]
+    return 32

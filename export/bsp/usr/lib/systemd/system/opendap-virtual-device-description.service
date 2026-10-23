@@ -1,12 +1,12 @@
 # The virtual board's device description (system hardware support spec §3): QEMU passes the
 # composed description of the running model as fw_cfg entry opt/org.opendap/device-description
-# (virtual-devices build/vdev.py), as a real board is identified by its hardware. It is copied
+# (virtual-devices odap-vdev), as a real board is identified by its hardware. It is copied
 # to /run/opendap/device/description.toml, where the shell and services read it.
 [Unit]
 Description=Device description of the virtual board
 DefaultDependencies=no
 After=systemd-modules-load.service
-Before=sysinit.target dap-shell.service
+Before=sysinit.target odap-shell.service
 ConditionPathExists=/sys/firmware/qemu_fw_cfg/by_name/opt/org.opendap/device-description/raw
 
 [Service]

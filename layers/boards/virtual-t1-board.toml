@@ -25,9 +25,9 @@ args = [
   "-device", "virtio-blk-pci,drive=system,addr=0x2,bootindex=0",
   # Management link (the cable to a computer): SSH on the host's loopback.
   "-netdev", "user,id=net0,hostfwd=tcp:127.0.0.1:{run.ssh_port}-:22", "-device", "virtio-net-pci,netdev=net0",
-  # USB-C in host mode: hot-plugged drives and audio devices (dap-qmp.py usb).
+  # USB-C in host mode: hot-plugged drives and audio devices (odap-vdev usb).
   "-device", "qemu-xhci,id=xhci", "-audiodev", "{host.audio},id=usbsnd",
-  # microSD socket, empty until a card is inserted (dap-qmp.py sd).
+  # microSD socket, empty until a card is inserted (odap-vdev sd).
   "-device", "sdhci-pci", "-drive", "if=none,id=sdcard", "-device", "sd-card,id=sd0,drive=sdcard",
   # Headphone output (the T1's DACs): one generic output to the host's audio.
   "-audiodev", "{host.audio},id=snd0", "-device", "virtio-sound-pci,audiodev=snd0,streams=1",

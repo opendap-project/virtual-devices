@@ -5,21 +5,22 @@ Virtual OpenDAP devices that run on a developer host with QEMU, as close to the 
 A virtual device is a **model** over **hardware layers**: a SoC, a board, a faceplate and HATs. Each layer brings the QEMU devices that stand in for its hardware and its part of the device description. The board hands that description to the guest, so one Blackbird OS image runs every model. [Specification](docs/specs/virtual-devices.md).
 
 ```sh
-build/dap-qemu.sh models               # the models
-build/dap-qemu.sh start --window       # run the virtual T1 in a window (DAP_MODEL picks another)
-build/dap-qmp.py tap 160 428           # touch, buttons, screenshots, USB, microSD from the host
-build/dap-qemu.sh battery 30           # the simulated battery and charger
-build/dap-qemu.sh reboot --debug       # the debug boot mode, once
-build/dap-qemu.sh stop
+bin/odap-vdev models                   # the models
+bin/odap-vdev start --window --wait    # run the virtual T1 in a window (--model picks another)
+bin/odap-vdev input tap 160 428        # touch; also input press ROLE, screen capture, usb, sd
+bin/odap-vdev power battery 30         # the simulated battery and charger
+bin/odap-vdev reboot --debug           # the debug boot mode, once
+bin/odap-vdev status --json            # state and endpoints, for other tools
+bin/odap-vdev stop
 ```
 
-It needs a Blackbird OS `qemu` image (blackbird-os `build/dap-image.sh qemu`) and the host tools of toolkit-host. For a LAN address, install socket_vmnet once with toolkit-host's `socket-vmnet.sh install`.
+It needs a Blackbird OS `qemu` image (toolkit-image `odap-image build qemu`) and the host tools of toolkit-host. For a LAN address, install socket_vmnet once with toolkit-host's `socket-vmnet.sh install`.
 
 ## Layout
 
 - `layers/` — hardware layers by kind (`soc/`, `boards/`, `faceplates/`)
 - `models/` — device models
-- `build/` — composer (`vdev.py`), runner (`dap-qemu.sh`), host-side control (`dap-qmp.py`)
+- `bin/odap-vdev`, `lib/odap_vdev/` — the tool and its modules
 - `export/bsp/` — the virtual board's support package, installed into Blackbird OS `qemu` images
 - `docs/` — requirements and specification
 

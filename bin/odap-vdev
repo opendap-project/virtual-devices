@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+# Run and drive virtual OpenDAP devices. See: odap-vdev --help
+import pathlib
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "lib"))
+from odap_vdev.cli import main  # noqa: E402
+
+sys.exit(main())

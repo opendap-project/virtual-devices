@@ -1,5 +1,3 @@
 .DS_Store
 .claude/settings.local.json
-
-# Local runs of virtual devices
-build/run/
+__pycache__/
