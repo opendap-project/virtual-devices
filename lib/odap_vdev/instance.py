@@ -201,7 +201,7 @@ class Instance:
         return str(link)
 
     def _lan_prefix(self, qemu):
-        """The LAN NIC through socket_vmnet when it runs (toolkit-host socket-vmnet.sh): QEMU is
+        """The LAN NIC through socket_vmnet when it runs (toolkit-host odap-vmnet): QEMU is
         started by socket_vmnet_client, which passes the connection as fd 3."""
         if os.environ.get("ODAP_NET") == "user":
             return [qemu], None

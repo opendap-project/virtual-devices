@@ -117,7 +117,7 @@ def run(args):
     c = args.command
     if c == "start":
         lan = inst.start(window=args.window)
-        print(f"{inst.name} started; LAN: {lan or 'none (management link only; toolkit-host socket-vmnet.sh install)'}")
+        print(f"{inst.name} started; LAN: {lan or 'none (management link only; toolkit-host odap-vmnet install)'}")
         if args.wait and not inst.wait_ssh():
             raise InstanceError("the management link did not answer")
     elif c == "stop":

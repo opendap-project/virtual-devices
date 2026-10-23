@@ -86,7 +86,7 @@ Each part of the T1 reference board (board BOM v1.7) and what the `virtual-t1` m
   - On the bridged socket (`/var/run/socket_vmnet.bridged.en0`), the instance takes an address from the LAN's DHCP, like a T1 on Wi-Fi, so other devices see it.
   - On the shared socket (Homebrew's service), the instance is behind vmnet's NAT, and only the host sees it.
   - Either way it has the internet and mDNS, so the host's CLI and Desktop can reach it by name. DNS-SD of the OpenDAP Protocol (`_odap._tcp`) comes with the protocol services.
-  - Setup is toolkit-host `socket-vmnet.sh install` (one-time, with administrator rights). `ODAP_NET=user` turns the LAN off.
+  - Setup is toolkit-host `odap-vmnet install` (one-time; run as yourself, it asks for administrator rights only for the daemon). `ODAP_NET=user` turns the LAN off.
 
 ## 7. What the toolkit shows
 

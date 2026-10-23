@@ -14,7 +14,7 @@ bin/odap-vdev status --json            # state and endpoints, for other tools
 bin/odap-vdev stop
 ```
 
-It needs a Blackbird OS `qemu` image (toolkit-image `odap-image build qemu`) and the host tools of toolkit-host. For a LAN address, install socket_vmnet once with toolkit-host's `socket-vmnet.sh install`.
+It needs a Blackbird OS `qemu` image (toolkit-image `odap-image build qemu`) and the host tools of toolkit-host. For a LAN address, install socket_vmnet once with toolkit-host's `odap-vmnet install`.
 
 ## Layout
 
