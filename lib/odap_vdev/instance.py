@@ -163,12 +163,16 @@ class Instance:
                 os.kill(pid, signal.SIGTERM)
         self.pid_file.unlink(missing_ok=True)
 
-    def reboot(self, debug=False):
-        if debug:
-            self.ssh("id=$(bootctl list --json=short | grep -o '\"id\":\"[^\"]*@debug\"' | cut -d'\"' -f4) "
-                     "&& [ -n \"$id\" ] && bootctl set-oneshot \"$id\" && systemctl reboot")
-        else:
-            self.ssh("systemctl", "reboot", check=False)
+    def reboot(self, mode="normal"):
+        """Restart into a boot mode, through the device's own odap-reboot (blackbird-os)."""
+        r = self.ssh("odap-reboot", mode, check=False)
+        if r.returncode == 2:
+            raise ValueError((r.stderr or "").strip().removeprefix("odap-reboot: ") or f"no mode {mode}")
+        if r.returncode not in (0, 255):  # 255: the connection closed as the device went down
+            raise InstanceError((r.stderr or "").strip() or "the reboot failed")
+
+    def boot_modes(self):
+        return self.ssh("odap-reboot", "--list").stdout.split()
 
     def wait_ssh(self, timeout=120):
         end = time.time() + timeout

@@ -30,8 +30,10 @@ def parser():
     s.add_argument("--window", action="store_true", help="also show its display in a window, at the panel's pixels")
     s.add_argument("--wait", action="store_true", help="return once the management link answers")
     sub.add_parser("stop", help="orderly power-off")
-    s = sub.add_parser("reboot", help="reboot")
-    s.add_argument("--debug", action="store_true", help="boot once into the debug boot mode")
+    s = sub.add_parser("reboot", help="reboot, optionally into another boot mode")
+    s.add_argument("--mode", default="normal", help="normal, debug, or a mode of the board (reboot --list)")
+    s.add_argument("--debug", action="store_const", const="debug", dest="mode", help="the same as --mode debug")
+    s.add_argument("--list", action="store_true", help="the boot modes the device has")
     s = sub.add_parser("status", help="state and endpoints")
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("ssh", help="a shell, or a command, on the device")
@@ -43,8 +45,10 @@ def parser():
     s.add_argument("file")
 
     inp = sub.add_parser("input", help="controls and touch").add_subparsers(dest="action", required=True)
-    s = inp.add_parser("press", help="press a control by its role")
-    s.add_argument("role", help="a role of the model's controls: action, volume-up, volume-down, main…")
+    s = inp.add_parser("press", help="press a control by its role, or several at once (a combination)")
+    s.add_argument("roles", nargs="+", metavar="role",
+                   help="roles of the model's controls: action, volume-up, volume-down, main…; "
+                        "several are pressed together, in order, and released together")
     s.add_argument("--hold", type=int, default=100, metavar="MS",
                    help="how long; main held as long as the board's PMIC time cuts the power")
     s = inp.add_parser("tap", help="touch a display pixel")
@@ -131,8 +135,11 @@ def run(args):
         inst.stop()
         print("stopped")
     elif c == "reboot":
-        inst.reboot(debug=args.debug)
-        print("rebooting" + (" into the debug boot mode, once" if args.debug else ""))
+        if args.list:
+            print("\n".join(inst.boot_modes()))
+            return 0
+        inst.reboot(args.mode)
+        print("rebooting" + ("" if args.mode == "normal" else f" into the {args.mode} boot mode, once"))
     elif c == "status":
         st = inst.status()
         if args.json:
@@ -154,25 +161,31 @@ def run(args):
     elif c == "input":
         q = qmp(inst)
         if args.action == "press":
-            keys = [k.get("qcode") for k in compose.controls(inst.model) if k["role"] == args.role and k.get("qcode")]
-            if not keys:
-                roles = sorted({k["role"] for k in compose.controls(inst.model)})
-                raise ValueError(f"no control with role {args.role!r} (roles: {', '.join(roles)})")
+            controls = compose.controls(inst.model)
+            keys = []
+            for role in args.roles:
+                qcodes = [k["qcode"] for k in controls if k["role"] == role and k.get("qcode")]
+                if not qcodes:
+                    roles = sorted({k["role"] for k in controls})
+                    raise ValueError(f"no control with role {role!r} (roles: {', '.join(roles)})")
+                keys.append(qcodes[0])
             # Held past the PMIC's time, `main` cuts the power, as the board's PMIC does in hardware:
             # no orderly shutdown, like pulling the battery.
-            cut = compose.forced_power_off_ms(inst.model) if args.role == "main" else None
-            q.key(keys[0], True)
+            cut = compose.forced_power_off_ms(inst.model) if "main" in args.roles else None
+            for k in keys:
+                q.key(k, True)
             if cut is not None and args.hold >= cut:
                 time.sleep(cut / 1000)
                 q.cmd("quit")
-                print(f"held {args.role} {cut} ms: the PMIC cut the power")
+                print(f"held {' + '.join(args.roles)} {cut} ms: the PMIC cut the power")
                 return 0
             time.sleep(args.hold / 1000)
             try:
-                q.key(keys[0], False)
+                for k in keys:
+                    q.key(k, False)
             except QmpError:
-                pass  # the instance powered off while the control was held
-            print(f"pressed {args.role} for {args.hold} ms")
+                pass  # the instance powered off while the controls were held
+            print(f"pressed {' + '.join(args.roles)} for {args.hold} ms")
         elif args.action == "tap":
             w, h = in_display(inst, (args.x, args.y))
             q.pointer(args.x, args.y, w, h)

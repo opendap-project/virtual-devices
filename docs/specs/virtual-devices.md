@@ -22,7 +22,7 @@
 | `layers/faceplates/` | H3: `virtual-touch`, with the panel, touch, the controls with roles and places, and the host's keys and pointer |
 | `layers/hats/` | H4: none yet |
 | `models/` | `virtual-t1`: its identity, and one layer per kind |
-| `bin/odap-vdev` | The tool, one domain per subcommand: `models`, `describe`, `start [--window] [--wait]`, `stop`, `reboot [--debug]`, `status [--json]`, `ssh`, `console`, `screen capture`, `input press ROLE / tap / swipe`, `usb list / plug / unplug`, `sd insert / eject`, `power battery / charger` |
+| `bin/odap-vdev` | The tool, one domain per subcommand: `models`, `describe`, `start [--window] [--wait]`, `stop`, `reboot [--mode MODE] [--list]`, `status [--json]`, `ssh`, `console`, `screen capture`, `input press ROLE [ROLE…] / tap / swipe`, `usb list / plug / unplug`, `sd insert / eject`, `power battery / charger` |
 | `lib/odap_vdev/` | Its modules: `compose` (model and layers to description and QEMU arguments), `instance` (one running device), `qmp`, `workspace` (other repositories through `repos.tsv`), `cli` |
 | `export/bsp/` | The virtual board's support package for Blackbird OS images (a mkosi config directory): the description from fw_cfg, the network links, the USB device port, the initrd's drivers |
 
@@ -45,7 +45,7 @@
   - The screen goes straight to the interface (OS-035).
 - **Debug boot mode.**
   - It is the image's "debug" boot entry: a UKI profile with `blackbird.debug`, full messages, and a login on the screen and on the serial port.
-  - Reach it with `odap-vdev reboot --debug`, which boots it once.
+  - Reach it with `odap-vdev reboot --mode debug` (or `opendap device reboot --mode debug`), which asks the device's `odap-reboot` to boot it once.
 - **Boot image.** On the T1 the boot image is U-Boot's logo, and the shell's first frame draws the same image before the interface (system shell spec §9). Not built yet: on the virtual board the screen is dark until the interface.
 
 ## 4. Window
@@ -67,7 +67,7 @@ Each part of the T1 reference board (board BOM v1.7) and what the `virtual-t1` m
 | 320 × 480 panel (ILI9488 on DSI) | virtio-gpu over MMIO, starting at and preferring 320 × 480 | Same pixels; DRM/KMS without hardware planes, and no 3D (Mesa renders in software). The firmware does not drive it, so boot shows no text and the window keeps its size |
 | Touch (faceplate HID) | virtio-multitouch; toolkit-verify `odap-inject` (uinput) for full contacts in tests | Same class. QEMU 11.1.2 passes no contacts from QMP to the multi-touch device |
 | — (simulator window) | virtio-tablet, used as one finger by `odap-shell`; `odap-vdev input tap / swipe` | Host mouse and VNC act as a finger |
-| Buttons: action, volume + and −, main | virtio-keyboard: `KEY_PLAYPAUSE`, `KEY_VOLUMEUP`, `KEY_VOLUMEDOWN`, `KEY_POWER`, plus the host keys Space, ↑, ↓ and P with the same roles (the faceplate layer) | Same roles; `odap-vdev input press ROLE`, or the keyboard in the window |
+| Buttons: action, volume + and −, main | virtio-keyboard: `KEY_PLAYPAUSE`, `KEY_VOLUMEUP`, `KEY_VOLUMEDOWN`, `KEY_POWER`, plus the host keys Space, ↑, ↓ and P with the same roles (the faceplate layer) | Same roles; `odap-vdev input press ROLE [ROLE…]` (several roles: a combination, pressed and released together), or the keyboard in the window. Holding `main` 8 s cuts the power, as the board's PMIC (`[pmic]` in the board layer) |
 | CS43198 DACs, 3.5 mm and 4.4 mm outputs | virtio-sound to the host's audio output | One generic output; no DAC filters, gain stages, DSD or jack detection |
 | USB-C in host mode (USB DAC, drives) | `qemu-xhci`; `odap-vdev usb plug storage FILE`, `usb plug audio`, `usb unplug` | Same classes (`usb-storage`, UAC through `snd-usb-audio`), plugged at run time |
 | USB-C in device mode (ADR 0013: NCM, ACM, mass storage, UAC2) | `dummy_hcd` and the configfs gadget, with this instance as the computer; `virtual-usb-device plug / unplug` | NCM, ACM and mass storage enumerate (checked 2026-10-23). UAC2 cannot bind, because `dummy_hcd` has no isochronous transfers, so it is tested on the T1. The host computer itself does not see the gadget |
