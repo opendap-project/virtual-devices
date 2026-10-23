@@ -121,10 +121,8 @@ class Instance:
 
         darwin = platform.system() == "Darwin"
         accel, audio = ("hvf", "coreaudio") if darwin else ("kvm", "pa")
-        prefix = brew_prefix("qemu")
-        fw = (pathlib.Path(prefix) / "share/qemu/edk2-aarch64-code.fd") if prefix else pathlib.Path("/usr/share/qemu/edk2-aarch64-code.fd")
-
         qemu = shutil.which("qemu-system-aarch64") or "qemu-system-aarch64"
+        fw = firmware(qemu)
         display = ["-display", "none"]
         if window:
             zoom = "on" if os.environ.get("ODAP_WINDOW_ZOOM") == "fit" else "off"
@@ -205,21 +203,22 @@ class Instance:
         started by socket_vmnet_client, which passes the connection as fd 3."""
         if os.environ.get("ODAP_NET") == "user":
             return [qemu], None
-        prefix = brew_prefix()
-        clients = ["/opt/socket_vmnet/bin/socket_vmnet_client"] + ([f"{prefix}/opt/socket_vmnet/bin/socket_vmnet_client"] if prefix else [])
-        client = next((c for c in clients if os.access(c, os.X_OK)), None)
+        client = "/opt/socket_vmnet/bin/socket_vmnet_client"
+        client = client if os.access(client, os.X_OK) else None
         socks = ([os.environ["ODAP_LAN_SOCKET"]] if os.environ.get("ODAP_LAN_SOCKET") else []) + \
-            sorted(str(p) for p in pathlib.Path("/var/run").glob("socket_vmnet.bridged.*")) + \
-            ([f"{prefix}/var/run/socket_vmnet"] if prefix else []) + ["/var/run/socket_vmnet"]
+            sorted(str(p) for p in pathlib.Path("/var/run").glob("socket_vmnet.bridged.*")) + ["/var/run/socket_vmnet"]
         sock = next((s for s in socks if pathlib.Path(s).is_socket()), None)
         if client and sock:
             return [client, sock, qemu, "-netdev", "socket,id=lan,fd=3", "-device", "virtio-net-pci,netdev=lan,mac=52:54:00:0d:a1:01"], sock
         return [qemu], None
 
 
-def brew_prefix(formula=None):
-    try:
-        r = subprocess.run(["brew", "--prefix", *([formula] if formula else [])], capture_output=True, text=True)
-        return r.stdout.strip() or None
-    except OSError:
-        return None
+def firmware(qemu):
+    """QEMU's own UEFI firmware for aarch64, next to the binary that runs: <prefix>/share/qemu,
+    whichever way QEMU was installed; then the distribution paths."""
+    real = pathlib.Path(shutil.which(qemu) or qemu).resolve()
+    for d in (real.parent.parent / "share/qemu", pathlib.Path("/usr/share/qemu"), pathlib.Path("/usr/share/AAVMF")):
+        for name in ("edk2-aarch64-code.fd", "AAVMF_CODE.fd"):
+            if (d / name).is_file():
+                return d / name
+    return real.parent.parent / "share/qemu/edk2-aarch64-code.fd"
