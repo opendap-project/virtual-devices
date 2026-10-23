@@ -1,0 +1,54 @@
+#!/bin/sh
+# The virtual T1's USB-C port in device mode, for development: the composite gadget of blackbird-os
+# ADR 0013 (one configuration: NCM, ACM, mass storage; UAC2 too where the controller allows) on
+# dummy_hcd, whose host side is this same instance, so it enumerates the gadget as a computer would.
+# dummy_hcd has no isochronous transfers, so UAC2 cannot bind here: it is left out of the virtual
+# board's configuration and tested on the T1.
+# Usage: virtual-usb-device plug | unplug | status | remove
+#   plug     create the gadget if needed and attach it (the cable is connected)
+#   unplug   detach it (the cable is pulled)
+# Until dap-usb composes the gadget itself, this script stands in for it on the virtual board only.
+set -eu
+g=/sys/kernel/config/usb_gadget/opendap
+store=/var/lib/virtual-usb/storage.img
+
+create() {
+  modprobe dummy_hcd
+  modprobe libcomposite
+  mountpoint -q /sys/kernel/config || mount -t configfs none /sys/kernel/config
+  [ -d "$g" ] && return 0
+  mkdir -p "$(dirname "$store")"
+  [ -f "$store" ] || truncate -s 64M "$store"
+  mkdir -p "$g"
+  # 0x1d6b:0x0104 is the Linux Foundation's multifunction composite gadget ID, for development only.
+  echo 0x1d6b > "$g/idVendor"; echo 0x0104 > "$g/idProduct"; echo 0x0200 > "$g/bcdUSB"
+  echo 0xEF > "$g/bDeviceClass"; echo 0x02 > "$g/bDeviceSubClass"; echo 0x01 > "$g/bDeviceProtocol"  # IAD
+  mkdir -p "$g/strings/0x409"
+  echo "The OpenDAP Project" > "$g/strings/0x409/manufacturer"
+  echo "Virtual T1" > "$g/strings/0x409/product"
+  cat /etc/machine-id > "$g/strings/0x409/serialnumber"
+  mkdir -p "$g/configs/c.1/strings/0x409"
+  echo "NCM + ACM + storage" > "$g/configs/c.1/strings/0x409/configuration"
+  for f in ncm.usb0 acm.usb0 mass_storage.usb0; do mkdir -p "$g/functions/$f"; done
+  echo "$store" > "$g/functions/mass_storage.usb0/lun.0/file"
+  echo 1 > "$g/functions/mass_storage.usb0/lun.0/removable"
+  for f in ncm.usb0 acm.usb0 mass_storage.usb0; do ln -s "$g/functions/$f" "$g/configs/c.1/"; done
+}
+
+case "${1:-status}" in
+  plug)
+    create
+    [ -n "$(cat "$g/UDC")" ] || basename "$(ls -d /sys/class/udc/* | head -1)" > "$g/UDC"
+    echo "plugged: $(cat "$g/UDC")";;
+  unplug)
+    [ -d "$g" ] && [ -n "$(cat "$g/UDC")" ] && echo "" > "$g/UDC"
+    echo unplugged;;
+  status)
+    if [ -d "$g" ] && [ -n "$(cat "$g/UDC")" ]; then echo "plugged: $(cat "$g/UDC")"; else echo unplugged; fi;;
+  remove)
+    [ -d "$g" ] || exit 0
+    [ -z "$(cat "$g/UDC")" ] || echo "" > "$g/UDC"
+    rm -f "$g"/configs/c.1/*.usb0
+    rmdir "$g/configs/c.1/strings/0x409" "$g/configs/c.1" "$g"/functions/* "$g/strings/0x409" "$g";;
+  *) echo "usage: $0 plug|unplug|status|remove" >&2; exit 2;;
+esac

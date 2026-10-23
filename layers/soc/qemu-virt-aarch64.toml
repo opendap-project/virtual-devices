@@ -1,0 +1,17 @@
+# H0: the SoC of a virtual device: QEMU's `virt` machine with the host's aarch64 cores
+# (HVF on macOS, KVM on Linux), and the UEFI firmware that boots Blackbird OS images.
+[layer]
+kind = "soc"
+id = "qemu-virt-aarch64"
+name = "QEMU virt, aarch64"
+
+[soc]
+cores = 4
+memory_mb = 4096
+
+[qemu]
+args = ["-machine", "virt", "-cpu", "host", "-smp", "{soc.cores}", "-m", "{soc.memory_mb}",
+        # No firmware boot menu wait; the system disk boots first whatever else is attached.
+        "-boot", "menu=on,splash-time=0",
+        # virtio over MMIO is modern only (the GPU driver needs virtio 1.0).
+        "-global", "virtio-mmio.force-legacy=false"]

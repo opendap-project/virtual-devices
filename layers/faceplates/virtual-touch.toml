@@ -1,0 +1,88 @@
+# H3: the touch faceplate of the T1 reference, virtualised: the 320 x 480 portrait panel, its touch
+# screen and the four controls with their roles and places. Control positions are the T1 reference
+# faceplate's as drawn in the interface mockups (t1 renders/web/t1-ui.css) at 0.153 mm per pixel:
+# UNVERIFIED against the enclosure. The host keyboard and pointer drive the same roles.
+[layer]
+kind = "faceplate"
+id = "virtual-touch"
+name = "Virtual touch faceplate"
+connector = "faceplate"
+
+[display]
+width_px = 320
+height_px = 480
+width_mm = 48.96
+height_mm = 73.44
+shape = "rectangle"
+technology = "lcd"
+distance = "handheld"
+
+# kind, role, Linux code, edge, offset and length in mm. Host keys first share the roles of the
+# buttons, so the simulator window can be driven from the keyboard.
+[[controls]]
+role = "action"
+kind = "button"
+code = "KEY_PLAYPAUSE"
+edge = "left"
+offset_mm = 5.81
+length_mm = 12.85
+[[controls]]
+role = "volume-up"
+kind = "rocker-half"
+code = "KEY_VOLUMEUP"
+edge = "left"
+offset_mm = 22.03
+length_mm = 10.71
+[[controls]]
+role = "volume-down"
+kind = "rocker-half"
+code = "KEY_VOLUMEDOWN"
+edge = "left"
+offset_mm = 34.58
+length_mm = 10.71
+[[controls]]
+role = "main"
+kind = "button"
+code = "KEY_POWER"
+edge = "right"
+offset_mm = 13.77
+length_mm = 14.08
+[[controls]]
+role = "action"
+kind = "button"
+code = "KEY_SPACE"
+edge = "left"
+offset_mm = 5.81
+length_mm = 12.85
+[[controls]]
+role = "volume-up"
+kind = "button"
+code = "KEY_UP"
+edge = "left"
+offset_mm = 22.03
+length_mm = 10.71
+[[controls]]
+role = "volume-down"
+kind = "button"
+code = "KEY_DOWN"
+edge = "left"
+offset_mm = 34.58
+length_mm = 10.71
+[[controls]]
+role = "main"
+kind = "button"
+code = "KEY_P"
+edge = "right"
+offset_mm = 13.77
+length_mm = 14.08
+
+[qemu]
+args = [
+  # The panel: the GPU starts at, and prefers, the panel's size, so the window never changes size and
+  # dap-shell finds the panel's mode without a kernel option; the firmware
+  # does not drive this MMIO GPU (it needs at least 80 x 25 text cells), so boot shows no text.
+  "-device", "virtio-gpu-device,xres={display.width_px},yres={display.height_px}",
+  "-device", "virtio-multitouch-pci", "-device", "virtio-keyboard-pci",
+  # The simulator window's pointer, which dap-shell treats as one finger.
+  "-device", "virtio-tablet-pci",
+]
