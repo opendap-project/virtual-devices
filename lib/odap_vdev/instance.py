@@ -186,6 +186,11 @@ class Instance:
         link = app / "Contents/MacOS/qemu-system-aarch64"
         link.unlink(missing_ok=True)
         link.symlink_to(qemu)
+        # The OpenDAP app icon (Blackbird UI's brand export, copied in assets/), not QEMU's generic one.
+        icon = pathlib.Path(__file__).resolve().parents[2] / "assets/opendap-app.icns"
+        if icon.is_file():
+            (app / "Contents/Resources").mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(icon, app / "Contents/Resources/AppIcon.icns")
         (app / "Contents/Info.plist").write_text(f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -193,9 +198,12 @@ class Instance:
   <key>CFBundleName</key><string>{self.name}</string>
   <key>CFBundleExecutable</key><string>qemu-system-aarch64</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 """)
+        # Tell Launch Services the bundle changed, so the Dock shows the current icon.
+        os.utime(app, None)
         return str(link)
 
     def _lan_prefix(self, qemu):
