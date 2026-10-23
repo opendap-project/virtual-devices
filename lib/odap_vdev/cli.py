@@ -45,7 +45,8 @@ def parser():
     inp = sub.add_parser("input", help="controls and touch").add_subparsers(dest="action", required=True)
     s = inp.add_parser("press", help="press a control by its role")
     s.add_argument("role", help="a role of the model's controls: action, volume-up, volume-down, main…")
-    s.add_argument("--hold", type=int, default=100, metavar="MS")
+    s.add_argument("--hold", type=int, default=100, metavar="MS",
+                   help="how long; main held as long as the board's PMIC time cuts the power")
     s = inp.add_parser("tap", help="touch a display pixel")
     s.add_argument("x", type=int); s.add_argument("y", type=int)
     s.add_argument("--hold", type=int, default=80, metavar="MS")
@@ -157,12 +158,20 @@ def run(args):
             if not keys:
                 roles = sorted({k["role"] for k in compose.controls(inst.model)})
                 raise ValueError(f"no control with role {args.role!r} (roles: {', '.join(roles)})")
+            # Held past the PMIC's time, `main` cuts the power, as the board's PMIC does in hardware:
+            # no orderly shutdown, like pulling the battery.
+            cut = compose.forced_power_off_ms(inst.model) if args.role == "main" else None
             q.key(keys[0], True)
+            if cut is not None and args.hold >= cut:
+                time.sleep(cut / 1000)
+                q.cmd("quit")
+                print(f"held {args.role} {cut} ms: the PMIC cut the power")
+                return 0
             time.sleep(args.hold / 1000)
             try:
                 q.key(keys[0], False)
             except QmpError:
-                pass  # the instance powered off while the control was held (a long press of main)
+                pass  # the instance powered off while the control was held
             print(f"pressed {args.role} for {args.hold} ms")
         elif args.action == "tap":
             w, h = in_display(inst, (args.x, args.y))

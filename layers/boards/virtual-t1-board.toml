@@ -9,6 +9,12 @@ name = "Virtual T1 board"
 [board]
 storage_gb = 32
 
+# The PMIC's forced power-off: holding `main` this long cuts the power, in hardware, whatever the
+# OS does (T1 controls spec §1.3). The T1's time is a PMIC register set in bring-up (UNVERIFIED);
+# this is the virtual board's own, applied by odap-vdev (input press main --hold).
+[pmic]
+forced_power_off_ms = 8000
+
 [[connectors]]
 name = "faceplate"
 [[connectors]]

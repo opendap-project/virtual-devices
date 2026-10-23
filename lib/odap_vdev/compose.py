@@ -115,6 +115,14 @@ def display(model):
     return None
 
 
+def forced_power_off_ms(model):
+    """How long `main` is held before the board's PMIC cuts the power; None without one."""
+    for layer in layers(model):
+        if "pmic" in layer:
+            return layer["pmic"].get("forced_power_off_ms")
+    return None
+
+
 def storage_gb(model):
     for layer in layers(model):
         if "board" in layer and "storage_gb" in layer["board"]:
