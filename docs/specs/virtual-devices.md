@@ -22,7 +22,7 @@
 | `layers/faceplates/` | H3: `virtual-touch`, with the panel, touch, the controls with roles and places, and the host's keys and pointer |
 | `layers/hats/` | H4: none yet |
 | `models/` | `virtual-t1`: its identity, and one layer per kind |
-| `bin/odap-vdev` | The tool, one domain per subcommand: `models`, `describe`, `start [--window] [--wait]`, `stop`, `reboot [--mode MODE] [--list]`, `status [--json]`, `ssh`, `console`, `screen capture`, `input press ROLE [ROLE…] / tap / swipe`, `usb list / plug / unplug`, `sd insert / eject`, `power battery / charger` |
+| `bin/odap-vdev` | The tool, one domain per subcommand: `models`, `describe`, `start [--window] [--no-on-top] [--wait]`, `stop`, `reboot [--mode MODE] [--list]`, `status [--json]`, `ssh`, `console`, `screen capture`, `input press ROLE [ROLE…] / tap / swipe`, `usb list / plug / unplug`, `sd insert / eject`, `power battery / charger` |
 | `lib/odap_vdev/` | Its modules: `compose` (model and layers to description and QEMU arguments), `instance` (one running device), `qmp`, `workspace` (other repositories through `repos.tsv`), `cli` |
 | `export/bsp/` | The virtual board's support package for Blackbird OS images (a mkosi config directory): the description from fw_cfg, the network links, the USB device port, the initrd's drivers |
 
@@ -52,7 +52,9 @@
 
 `odap-vdev start --window` opens the display at the panel's pixels, 1:1. The GPU starts at the panel's size and the firmware never resizes it, so the window opens at the right size and keeps it (VD-007). `ODAP_WINDOW_ZOOM=fit` scales the picture with the window instead.
 
-On macOS the window belongs to an app bundle named after the model ("Virtual T1"), which gives it a name in the Dock and lets automation address it. The host's pointer acts as a finger and its keys as the controls.
+On macOS the window belongs to an app bundle named after the model ("Virtual T1"), with the OpenDAP app icon, which gives it a name in the Dock and lets automation address it.
+
+The window stays above other windows by default, so it stays in view while you work in an editor or a terminal; `--no-on-top` turns that off. QEMU's cocoa display has no option for it (QEMU 11.1), so odap-vdev builds a small library with the system's clang (`host/macos/window-on-top.m`, kept in `~/.cache/opendap/vdev/`) and loads it into QEMU only. It sets the level of QEMU's own windows and changes nothing else. An `always-on-top` option for QEMU's cocoa display, proposed upstream, would replace it. The host's pointer acts as a finger and its keys as the controls.
 
 ## 5. Fidelity
 

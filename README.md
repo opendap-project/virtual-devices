@@ -6,7 +6,7 @@ A virtual device is a **model** over **hardware layers**: a SoC, a board, a face
 
 ```sh
 bin/odap-vdev models                   # the models
-bin/odap-vdev start --window --wait    # run the virtual T1 in a window (--model picks another)
+bin/odap-vdev start --window --wait    # run the virtual T1 in a window, kept on top (--no-on-top; --model picks another)
 bin/odap-vdev input tap 160 428        # touch; also input press ROLE [ROLE…] (combinations), screen capture, usb, sd
 bin/odap-vdev power battery 30         # the simulated battery and charger
 bin/odap-vdev reboot --mode debug      # a boot mode, once (reboot --list: the device's modes)

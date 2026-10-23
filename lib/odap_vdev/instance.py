@@ -3,12 +3,14 @@
 State lives in $XDG_STATE_HOME/opendap/vdev/<model>/ (not in a repository): the disk on top of
 the image, firmware variables, the composed description, QMP socket, console and QEMU logs.
 """
+import hashlib
 import os
 import pathlib
 import platform
 import shutil
 import signal
 import subprocess
+import sys
 import time
 
 from . import compose, workspace
@@ -99,7 +101,7 @@ class Instance:
         return r
 
     # Lifecycle
-    def start(self, window=False):
+    def start(self, window=False, on_top=True):
         if self.pid():
             raise InstanceError(f"{self.name} is already running (pid {self.pid()})")
         image = self.image()
@@ -124,15 +126,21 @@ class Instance:
         qemu = shutil.which("qemu-system-aarch64") or "qemu-system-aarch64"
         fw = firmware(qemu)
         display = ["-display", "none"]
+        launcher = []
         if window:
             zoom = "on" if os.environ.get("ODAP_WINDOW_ZOOM") == "fit" else "off"
             if darwin:
                 display = ["-display", f"cocoa,zoom-to-fit={zoom}"]
                 qemu = self._app_bundle(qemu)
+                if on_top:
+                    lib = window_on_top_library()
+                    if lib:
+                        # Only QEMU loads it: env sets the variable for the program it runs.
+                        launcher = ["/usr/bin/env", f"DYLD_INSERT_LIBRARIES={lib}"]
             else:
                 display = ["-display", f"gtk,zoom-to-fit={zoom}"]
 
-        argv, lan = self._lan_prefix(qemu)
+        argv, lan = self._lan_prefix(launcher + [qemu])
         argv += compose.qemu_args(self.model, {"run.disk": str(self.disk), "run.ssh_port": self.ssh_port, "host.audio": audio})
         argv += ["-name", self.name, "-accel", accel,
                  "-drive", f"if=pflash,format=raw,readonly=on,file={fw}",
@@ -211,18 +219,37 @@ class Instance:
         return str(link)
 
     def _lan_prefix(self, qemu):
+        """`qemu` is the command that runs QEMU (its launcher words, then the program)."""
         """The LAN NIC through socket_vmnet when it runs (toolkit-host odap-vmnet): QEMU is
         started by socket_vmnet_client, which passes the connection as fd 3."""
         if os.environ.get("ODAP_NET") == "user":
-            return [qemu], None
+            return list(qemu), None
         client = "/opt/socket_vmnet/bin/socket_vmnet_client"
         client = client if os.access(client, os.X_OK) else None
         socks = ([os.environ["ODAP_LAN_SOCKET"]] if os.environ.get("ODAP_LAN_SOCKET") else []) + \
             sorted(str(p) for p in pathlib.Path("/var/run").glob("socket_vmnet.bridged.*")) + ["/var/run/socket_vmnet"]
         sock = next((s for s in socks if pathlib.Path(s).is_socket()), None)
         if client and sock:
-            return [client, sock, qemu, "-netdev", "socket,id=lan,fd=3", "-device", "virtio-net-pci,netdev=lan,mac=52:54:00:0d:a1:01"], sock
-        return [qemu], None
+            return [client, sock, *qemu, "-netdev", "socket,id=lan,fd=3", "-device", "virtio-net-pci,netdev=lan,mac=52:54:00:0d:a1:01"], sock
+        return list(qemu), None
+
+
+def window_on_top_library():
+    """The library that keeps QEMU's window on top (host/macos/window-on-top.m), built with the
+    system's clang once per source and kept in the cache; None, with a note, if it cannot be."""
+    src = pathlib.Path(__file__).resolve().parents[2] / "host/macos/window-on-top.m"
+    digest = hashlib.sha256(src.read_bytes()).hexdigest()[:16]
+    out = pathlib.Path(os.environ.get("XDG_CACHE_HOME", pathlib.Path.home() / ".cache")) / f"opendap/vdev/window-on-top-{digest}.dylib"
+    if out.is_file():
+        return str(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    r = subprocess.run(["clang", "-dynamiclib", "-fobjc-arc", "-framework", "AppKit", "-O2", "-o", str(out), str(src)],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"odap-vdev: the window cannot stay on top (clang: {r.stderr.strip() or r.returncode}); "
+              "install the Xcode command-line tools", file=sys.stderr)
+        return None
+    return str(out)
 
 
 def firmware(qemu):

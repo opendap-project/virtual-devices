@@ -28,6 +28,8 @@ def parser():
 
     s = sub.add_parser("start", help="boot the model in the background")
     s.add_argument("--window", action="store_true", help="also show its display in a window, at the panel's pixels")
+    s.add_argument("--on-top", action=argparse.BooleanOptionalAction, default=True,
+                   help="keep the window above other windows (default; --no-on-top to turn it off)")
     s.add_argument("--wait", action="store_true", help="return once the management link answers")
     sub.add_parser("stop", help="orderly power-off")
     s = sub.add_parser("reboot", help="reboot, optionally into another boot mode")
@@ -121,7 +123,7 @@ def run(args):
     inst = Instance(args.model)
     c = args.command
     if c == "start":
-        lan = inst.start(window=args.window)
+        lan = inst.start(window=args.window, on_top=args.on_top)
         if lan:
             net = lan
         elif os.environ.get("ODAP_NET") == "user":
