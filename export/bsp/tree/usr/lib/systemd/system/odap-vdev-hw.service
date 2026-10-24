@@ -4,7 +4,7 @@
 [Unit]
 Description=Virtual board faceplate hardware (status LED, ambient light sensor)
 DefaultDependencies=no
-After=systemd-modules-load.service
+After=systemd-modules-load.service systemd-sysext.service
 Before=odap-shell.service
 ConditionPathExists=/usr/bin/odap-vdev-hw
 
