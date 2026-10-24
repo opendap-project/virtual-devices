@@ -23,6 +23,7 @@ def parser():
     s = sub.add_parser("models", help="the models this checkout defines")
     s.add_argument("--json", action="store_true")
     sub.add_parser("describe", help="the model's device description (TOML)")
+    sub.add_parser("frame", help="how a window draws the device around its screen (JSON)")
     s = sub.add_parser("qemu-args", help="the model's QEMU arguments, one per line (for inspection)")
     s.add_argument("values", nargs="*", metavar="KEY=VALUE")
 
@@ -30,7 +31,12 @@ def parser():
     s.add_argument("--window", action="store_true", help="also show its display in a window, at the panel's pixels")
     s.add_argument("--on-top", action=argparse.BooleanOptionalAction, default=True,
                    help="keep the window above other windows (default; --no-on-top to turn it off)")
+    s.add_argument("--frame", action=argparse.BooleanOptionalAction, default=True,
+                   help="draw the device around its display, with the sidebar of hardware actions (default)")
     s.add_argument("--wait", action="store_true", help="return once the management link answers")
+    s = sub.add_parser("window", help="open the simulator window of the running device")
+    s.add_argument("--on-top", action=argparse.BooleanOptionalAction, default=True)
+    s.add_argument("--frame", action=argparse.BooleanOptionalAction, default=True)
     sub.add_parser("stop", help="orderly power-off")
     s = sub.add_parser("reboot", help="reboot, optionally into another boot mode")
     s.add_argument("--mode", default="normal", help="normal, debug, or a mode of the board (reboot --list)")
@@ -115,6 +121,12 @@ def run(args):
     if args.command == "describe":
         sys.stdout.write(compose.description(compose.load(compose.model_path(args.model))))
         return 0
+    if args.command == "frame":
+        f = compose.frame(compose.load(compose.model_path(args.model)))
+        if f is None:
+            raise ValueError(f"{args.model} describes no frame")
+        print(json.dumps(f))
+        return 0
     if args.command == "qemu-args":
         values = dict(v.split("=", 1) for v in args.values)
         print("\n".join(compose.qemu_args(compose.load(compose.model_path(args.model)), values)))
@@ -123,7 +135,7 @@ def run(args):
     inst = Instance(args.model)
     c = args.command
     if c == "start":
-        lan = inst.start(window=args.window, on_top=args.on_top)
+        lan = inst.start(window=args.window, on_top=args.on_top, framed=args.frame)
         if lan:
             net = lan
         elif os.environ.get("ODAP_NET") == "user":
@@ -133,6 +145,11 @@ def run(args):
         print(f"{inst.name} started; LAN: {net}")
         if args.wait and not inst.wait_ssh():
             raise InstanceError("the management link did not answer")
+    elif c == "window":
+        if not inst.pid():
+            raise InstanceError(f"{inst.name} is not running (odap-vdev start)")
+        inst.open_window(on_top=args.on_top, framed=args.frame)
+        print("window opened")
     elif c == "stop":
         inst.stop()
         print("stopped")

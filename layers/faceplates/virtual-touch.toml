@@ -19,6 +19,24 @@ distance = "handheld"
 
 # The touch panel: QEMU's virtio-multitouch reports positions 0 to 32767 on each axis and tracks
 # 10 slots (QEMU 11.1 include/ui/input.h, INPUT_EVENT_ABS_MAX and INPUT_EVENT_SLOTS_MAX).
+# How the simulator window draws the device around the screen (odap-vdev frame; runner-only, never
+# in the device description). Schematic until the case and the faceplate export their geometry:
+# the body is T1-032's ideal outline (54 x 85.6 mm), the display is centred in it, the corner
+# radii are guesses (UNVERIFIED). Shapes and colours of the controls follow the concept art
+# (T1-059): Action an orange disc, Volume + and - two half-capsules, Main a ribbed silver capsule.
+[frame]
+body_width_mm = 54.0
+body_height_mm = 85.6
+body_radius_mm = 7.0
+display_x_mm = 2.52
+display_y_mm = 6.08
+display_radius_mm = 1.0
+body_color = "#1d2125"
+bezel_color = "#0b0c0e"
+action_color = "#ff6a2a"
+key_color = "#aab0b6"
+key_depth_mm = 1.6
+
 [touch]
 resolution_x = 32768
 resolution_y = 32768

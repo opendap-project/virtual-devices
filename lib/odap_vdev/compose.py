@@ -125,6 +125,16 @@ def forced_power_off_ms(model):
     return None
 
 
+def frame(model):
+    """How a window draws the device around its screen (runner-only), with the display and the
+    controls it needs; None when no layer describes a frame."""
+    f = next((layer["frame"] for layer in layers(model) if "frame" in layer), None)
+    d = display(model)
+    if f is None or d is None:
+        return None
+    return {"schema": "opendap.vdev-frame/v1", "frame": f, "display": d, "controls": controls(model)}
+
+
 def storage_gb(model):
     for layer in layers(model):
         if "board" in layer and "storage_gb" in layer["board"]:

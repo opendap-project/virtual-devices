@@ -7,7 +7,7 @@ SPDX-FileCopyrightText = "2026 The OpenDAP Project"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 [[annotations]]
-path = ["layers/**", "models/**", "assets/**"]
+path = ["layers/**", "models/**", "assets/**", "viewer/crates/opendap-rfb/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 The OpenDAP Project"
 SPDX-License-Identifier = "MPL-2.0"

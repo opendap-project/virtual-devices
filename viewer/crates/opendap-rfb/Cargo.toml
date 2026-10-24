@@ -1,0 +1,8 @@
+[package]
+name = "opendap-rfb"
+version = "0.1.0"
+description = "A minimal RFB (VNC) client: 32-bit raw frames, desktop resizes and pointer events (RFC 6143)"
+edition.workspace = true
+rust-version.workspace = true
+license = "MPL-2.0"
+publish = false

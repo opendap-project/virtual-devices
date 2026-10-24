@@ -4,6 +4,7 @@ State lives in $XDG_STATE_HOME/opendap/vdev/<model>/ (not in a repository): the 
 the image, firmware variables, the composed description, QMP socket, console and QEMU logs.
 """
 import hashlib
+import json
 import os
 import pathlib
 import platform
@@ -112,7 +113,7 @@ class Instance:
         return r
 
     # Lifecycle
-    def start(self, window=False, on_top=True):
+    def start(self, window=False, on_top=True, framed=True):
         if self.pid():
             raise InstanceError(f"{self.name} is already running (pid {self.pid()})")
         image = self.image()
@@ -138,7 +139,10 @@ class Instance:
         fw = firmware(qemu)
         display = ["-display", "none"]
         launcher = []
-        if window:
+        # The window is the simulator window (viewer/, ADR 0001), drawn over VNC; QEMU's own
+        # window (ODAP_WINDOW=qemu) is the fallback, without the frame and the sidebar.
+        viewer = window and os.environ.get("ODAP_WINDOW") != "qemu" and build_viewer()
+        if window and not viewer:
             zoom = "on" if os.environ.get("ODAP_WINDOW_ZOOM") == "fit" else "off"
             if darwin:
                 display = ["-display", f"cocoa,zoom-to-fit={zoom}"]
@@ -167,7 +171,30 @@ class Instance:
         time.sleep(1)
         if p.poll() is not None:
             raise InstanceError(f"QEMU exited: {self.qemu_log.read_text().strip()}")
+        if viewer:
+            self.open_window(viewer, on_top=on_top, framed=framed)
         return lan
+
+    def open_window(self, viewer=None, on_top=True, framed=True):
+        """The simulator window for this running instance: its display over VNC, framed by the
+        device, with the sidebar. It closes when the instance stops."""
+        viewer = viewer or build_viewer()
+        if not viewer:
+            raise InstanceError("the simulator window is not built (cargo, viewer/)")
+        f = compose.frame(self.model)
+        if f is None:
+            framed = False
+            d = compose.display(self.model)
+            f = {"frame": None, "display": d, "controls": compose.controls(self.model)}
+        frame = self.state / "frame.json"
+        frame.write_text(json.dumps(f))
+        program = self._app_bundle(viewer) if platform.system() == "Darwin" else viewer
+        argv = [program, "--frame", str(frame), "--vnc", f"127.0.0.1:{5900 + self.vnc_display}",
+                "--qmp", str(self.qmp_socket), "--vdev", str(TOOL), "--name", self.name]
+        argv += [] if framed else ["--no-frame"]
+        argv += [] if on_top else ["--no-on-top"]
+        with open(self.state / "window.log", "w") as log:
+            subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
 
     def stop(self, timeout=30):
         """An orderly power-off over the management link; QEMU is stopped if the guest does not answer."""
@@ -202,13 +229,15 @@ class Instance:
         return False
 
     # Helpers
-    def _app_bundle(self, qemu):
+    def _app_bundle(self, program):
         """On macOS the window belongs to an app bundle named after the model."""
         app = self.state / f"{self.name}.app"
         (app / "Contents/MacOS").mkdir(parents=True, exist_ok=True)
-        link = app / "Contents/MacOS/qemu-system-aarch64"
-        link.unlink(missing_ok=True)
-        link.symlink_to(qemu)
+        exe = pathlib.Path(program).name
+        for old in (app / "Contents/MacOS").iterdir():
+            old.unlink()
+        link = app / "Contents/MacOS" / exe
+        link.symlink_to(program)
         # The OpenDAP app icon (Blackbird UI's brand export, copied in assets/), not QEMU's generic one.
         icon = pathlib.Path(__file__).resolve().parents[2] / "assets/opendap-app.icns"
         if icon.is_file():
@@ -219,7 +248,7 @@ class Instance:
 <plist version="1.0"><dict>
   <key>CFBundleIdentifier</key><string>org.opendap.{self.model_name}</string>
   <key>CFBundleName</key><string>{self.name}</string>
-  <key>CFBundleExecutable</key><string>qemu-system-aarch64</string>
+  <key>CFBundleExecutable</key><string>{exe}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>NSHighResolutionCapable</key><true/>
@@ -247,6 +276,25 @@ class Instance:
 
 # Where a user's images are, without a toolkit or a blackbird-os checkout.
 USER_IMAGES = pathlib.Path(os.environ.get("XDG_DATA_HOME", pathlib.Path.home() / ".local/share")) / "opendap/images"
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+TOOL = ROOT / "bin/odap-vdev"
+
+
+def build_viewer():
+    """The simulator window (viewer/), built with cargo when its sources changed (cargo decides);
+    None, with a note, if it cannot be built."""
+    manifest = ROOT / "viewer/Cargo.toml"
+    if not shutil.which("cargo"):
+        print("odap-vdev: no cargo: using QEMU's own window (install Rust for the simulator window)", file=sys.stderr)
+        return None
+    r = subprocess.run(["cargo", "build", "--release", "-q", "--manifest-path", str(manifest)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if r.returncode != 0:
+        print(f"odap-vdev: the simulator window did not build; using QEMU's own window:\n{r.stderr.strip()[-800:]}", file=sys.stderr)
+        return None
+    return str(ROOT / "viewer/target/release/odap-vdev-view")
 
 
 def window_on_top_library():

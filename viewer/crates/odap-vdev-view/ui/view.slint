@@ -1,0 +1,223 @@
+// The simulator window: the virtual device's display, framed by the device (schematic until the
+// case exports its geometry), and a sidebar of hardware actions that folds away.
+
+import { Button, Slider, Switch, ScrollView } from "std-widgets.slint";
+
+export struct Key {
+    role: string,
+    // "left" or "right", its centre and length along the edge (px from the display's top), and
+    // how it looks: "disc" (Action), "half-top" and "half-bottom" (the volume capsule), "capsule".
+    edge: string,
+    centre: length,
+    span: length,
+    shape: string,
+    pressed: bool,
+}
+
+export global Palette {
+    in property <color> body: #1d2125;
+    in property <color> bezel: #0b0c0e;
+    in property <color> action: #ff6a2a;
+    in property <color> key: #aab0b6;
+    out property <color> page: #111315;
+    out property <color> panel: #181b1e;
+    out property <color> line: #2a2e33;
+    out property <color> text: #f5f6f4;
+    out property <color> muted: #9aa0a6;
+}
+
+component Section inherits VerticalLayout {
+    in property <string> title;
+    spacing: 6px;
+    Text { text: root.title; color: Palette.muted; font-size: 11px; font-weight: 600; }
+    @children
+}
+
+// A control of the device in the sidebar: pressed while the mouse button is down, so long
+// presses and combinations work as on the hardware.
+component HoldButton inherits Rectangle {
+    in property <string> label;
+    callback down();
+    callback up();
+    height: 30px;
+    border-radius: 6px;
+    background: touch.pressed ? Palette.line.brighter(40%) : Palette.line;
+    Text { text: root.label; color: Palette.text; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+    touch := TouchArea {
+        pointer-event(e) => {
+            if e.kind == PointerEventKind.down { root.down(); }
+            if e.kind == PointerEventKind.up || e.kind == PointerEventKind.cancel { root.up(); }
+        }
+    }
+}
+
+export component View inherits Window {
+    in property <string> name;
+    in property <image> screen;
+    in property <length> screen-w;
+    in property <length> screen-h;
+    // The frame, in logical px (panel pixels): the body, and where the display sits in it.
+    in property <bool> framed: true;
+    in property <length> body-w;
+    in property <length> body-h;
+    in property <length> body-radius;
+    in property <length> display-x;
+    in property <length> display-y;
+    in property <length> display-radius;
+    in property <length> key-depth;
+    in-out property <[Key]> keys;
+    in-out property <bool> sidebar: true;
+    in property <string> status;
+    in-out property <float> battery: 50;
+    in-out property <bool> charger;
+
+    callback screen-pointer(string, length, length);
+    callback key(string, bool);
+    callback combo(bool);
+    callback action(string);
+    callback battery-set(float);
+    callback charger-set(bool);
+    callback host-key(string, bool);
+
+    title: root.name;
+    background: Palette.page;
+
+    // The host keyboard drives the device's controls (the faceplate's host keys).
+    forward-focus: keys-in;
+    keys-in := FocusScope {
+        key-pressed(e) => { root.host-key(e.text, true); accept }
+        key-released(e) => { root.host-key(e.text, false); accept }
+    }
+
+    HorizontalLayout {
+        padding: 16px;
+        spacing: 16px;
+
+        // The device.
+        Rectangle {
+            width: (root.framed ? root.body-w + 2 * root.key-depth : root.screen-w);
+            height: (root.framed ? root.body-h : root.screen-h);
+
+            if root.framed: Rectangle {
+                x: root.key-depth;
+                width: root.body-w;
+                height: root.body-h;
+                border-radius: root.body-radius;
+                background: Palette.body;
+                drop-shadow-blur: 18px;
+                drop-shadow-color: #00000088;
+                drop-shadow-offset-y: 6px;
+                // The display's black glass around the active area.
+                Rectangle {
+                    x: root.display-x - 4px;
+                    y: root.display-y - 4px;
+                    width: root.screen-w + 8px;
+                    height: root.screen-h + 8px;
+                    border-radius: root.display-radius + 4px;
+                    background: Palette.bezel;
+                }
+            }
+
+            // The controls on the edges, as the concept art draws them; pressable.
+            if root.framed: Rectangle {
+                for k[i] in root.keys: Rectangle {
+                    property <length> lift: k.pressed ? root.key-depth * 0.4 : 0;
+                    x: k.edge == "left" ? self.lift : root.key-depth + root.body-w - root.key-depth * 0.2 - self.lift;
+                    y: root.display-y + k.centre - k.span / 2;
+                    width: root.key-depth * 1.2;
+                    height: k.span;
+                    background: k.role == "action" ? Palette.action : Palette.key;
+                    border-top-left-radius: k.shape == "half-bottom" ? 1px : self.width / 2;
+                    border-top-right-radius: k.shape == "half-bottom" ? 1px : self.width / 2;
+                    border-bottom-left-radius: k.shape == "half-top" ? 1px : self.width / 2;
+                    border-bottom-right-radius: k.shape == "half-top" ? 1px : self.width / 2;
+                    animate x { duration: 60ms; }
+                    TouchArea {
+                        pointer-event(e) => {
+                            if e.kind == PointerEventKind.down { root.key(k.role, true); }
+                            if e.kind == PointerEventKind.up || e.kind == PointerEventKind.cancel { root.key(k.role, false); }
+                        }
+                    }
+                }
+            }
+
+            // The display: the guest's frame, 1:1 in panel pixels; the pointer is a finger.
+            Image {
+                x: root.framed ? root.key-depth + root.display-x : 0;
+                y: root.framed ? root.display-y : 0;
+                width: root.screen-w;
+                height: root.screen-h;
+                source: root.screen;
+                image-rendering: pixelated;
+                TouchArea {
+                    pointer-event(e) => {
+                        if e.kind == PointerEventKind.down { root.screen-pointer("down", self.mouse-x, self.mouse-y); }
+                        if e.kind == PointerEventKind.up || e.kind == PointerEventKind.cancel { root.screen-pointer("up", self.mouse-x, self.mouse-y); }
+                        if e.kind == PointerEventKind.move { root.screen-pointer("move", self.mouse-x, self.mouse-y); }
+                    }
+                }
+            }
+        }
+
+        // The sidebar: hardware actions, folded away by its handle.
+        Rectangle {
+            width: root.sidebar ? 220px : 20px;
+            background: root.sidebar ? Palette.panel : transparent;
+            border-radius: 8px;
+            Rectangle {
+                x: 0;
+                width: 20px;
+                height: 40px;
+                y: 0;
+                Text { text: root.sidebar ? "›" : "‹"; color: Palette.muted; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
+                TouchArea { clicked => { root.sidebar = !root.sidebar; } }
+            }
+            if root.sidebar: ScrollView {
+                x: 20px;
+                width: parent.width - 20px;
+                VerticalLayout {
+                    padding: 10px;
+                    padding-left: 0;
+                    spacing: 14px;
+                    Text { text: root.name; color: Palette.text; font-size: 14px; font-weight: 600; }
+                    Text { text: root.status; color: Palette.muted; font-size: 11px; wrap: word-wrap; }
+                    Section {
+                        title: "CONTROLS (hold to hold)";
+                        for k in root.keys: HoldButton {
+                            label: k.role;
+                            down => { root.key(k.role, true); }
+                            up => { root.key(k.role, false); }
+                        }
+                        HoldButton { label: "main + volume-down"; down => { root.combo(true); } up => { root.combo(false); } }
+                    }
+                    Section {
+                        title: "POWER";
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Slider {
+                                minimum: 0;
+                                maximum: 100;
+                                value <=> root.battery;
+                                released => { root.battery-set(root.battery); }
+                            }
+                            Text { text: round(root.battery) + " %"; color: Palette.text; font-size: 12px; vertical-alignment: center; width: 40px; }
+                        }
+                        Switch { text: "Charger"; checked <=> root.charger; toggled => { root.charger-set(root.charger); } }
+                    }
+                    Section {
+                        title: "STORAGE";
+                        HorizontalLayout { spacing: 6px; Button { text: "microSD in"; clicked => { root.action("sd-insert"); } } Button { text: "out"; clicked => { root.action("sd-eject"); } } }
+                        HorizontalLayout { spacing: 6px; Button { text: "USB disk in"; clicked => { root.action("usb-disk"); } } Button { text: "out"; clicked => { root.action("usb-disk-out"); } } }
+                        HorizontalLayout { spacing: 6px; Button { text: "USB DAC in"; clicked => { root.action("usb-audio"); } } Button { text: "out"; clicked => { root.action("usb-audio-out"); } } }
+                    }
+                    Section {
+                        title: "SYSTEM";
+                        Button { text: "Screenshot"; clicked => { root.action("screenshot"); } }
+                        HorizontalLayout { spacing: 6px; Button { text: "Reboot"; clicked => { root.action("reboot"); } } Button { text: "Debug boot"; clicked => { root.action("reboot-debug"); } } }
+                        Button { text: "Power off"; clicked => { root.action("poweroff"); } }
+                    }
+                }
+            }
+        }
+    }
+}
