@@ -170,6 +170,8 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // The controls, in order, on a thread of their own: the window never waits for QMP.
     let (key_tx, key_rx) = mpsc::channel::<InputEvent>();
+    // A keyboard's keys (← →) go the same way, in order with the buttons.
+    let keyboard_tx = key_tx.clone();
     {
         let live = LiveKeys::new(&a.qmp, qcode_of.iter().map(|(r, q)| (Role::from(r.as_str()), q.clone())).collect());
         std::thread::spawn(move || {
@@ -247,13 +249,18 @@ fn main() -> Result<(), slint::PlatformError> {
             if trace {
                 eprintln!("odap-vdev-view: host key {:?} {down}", text.as_str());
             }
-            // ← and → are the window's own: Volume + and −, as ↑ and ↓ are. Enter is Action, as
-            // Space is: the key that takes the default action or the focused element on a
-            // desktop; which of the two Action does is the device's to decide, not the key's.
+            // ↑ and ↓ are the buttons by their place (Volume + above, Volume − below), as the
+            // faceplate's host keys say. ← and → are no button (the buttons stand vertically):
+            // they reach the device as a keyboard's arrows, so a focused slider takes them
+            // (→ more, ← less). Enter is Action, as Space is: the key that takes the default
+            // action or the focused element; which of the two Action does is the device's call.
             match text.as_str() {
                 "\n" | "\r" => return press("action", down),
-                "\u{F702}" => return press("volume-up", down),
-                "\u{F703}" => return press("volume-down", down),
+                "\u{F702}" | "\u{F703}" => {
+                    let key = if text.as_str() == "\u{F702}" { "left" } else { "right" };
+                    let _ = keyboard_tx.send(InputEvent::Keyboard { key: key.into(), down });
+                    return;
+                }
                 _ => {}
             }
             let qcode = match text.as_str() {

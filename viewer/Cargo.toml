@@ -13,10 +13,10 @@ license = "GPL-3.0-or-later"
 opendap-rfb = { path = "crates/opendap-rfb" }
 # The OpenDAP CLI's crates (rfcs 0008): the use cases and adapters `opendap` and OpenDAP Desktop
 # run, consumed as published, never from a checkout's sources.
-opendap-model = { git = "https://github.com/opendap-project/cli", rev = "e82b2a5" }
-opendap-core = { git = "https://github.com/opendap-project/cli", rev = "e82b2a5" }
-opendap-transport-ssh = { git = "https://github.com/opendap-project/cli", rev = "e82b2a5" }
-opendap-transport-vm = { git = "https://github.com/opendap-project/cli", rev = "e82b2a5" }
+opendap-model = { git = "https://github.com/opendap-project/cli", rev = "21cf82d" }
+opendap-core = { git = "https://github.com/opendap-project/cli", rev = "21cf82d" }
+opendap-transport-ssh = { git = "https://github.com/opendap-project/cli", rev = "21cf82d" }
+opendap-transport-vm = { git = "https://github.com/opendap-project/cli", rev = "21cf82d" }
 slint = { version = "1.18.1", default-features = false }
 slint-build = "1.18.1"
 serde = { version = "1", features = ["derive"] }

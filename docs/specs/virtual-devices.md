@@ -79,7 +79,8 @@ The keyboard drives the whole window, with the mouse or without it, and with the
 
 | Keys | Does |
 |---|---|
-| Space or Enter, P, ← or ↑, → or ↓ | Action, Main, Volume +, Volume −, held as long as the key |
+| Space or Enter, P, ↑, ↓ | Action, Main, Volume + (the upper button), Volume − (the lower one), held as long as the key |
+| ← → | A keyboard's arrows, not buttons (the buttons stand vertically): a focused slider takes them, → more, ← less |
 | S | Screenshot (Main + Volume −), held |
 | ⌘S, ⌘R, ⌘⇧R, ⌘⇧P | Save PNG, reboot, reboot into debug, power off |
 | ⌘1 … ⌘4 | microSD, USB disk, USB DAC, charger, in or out |

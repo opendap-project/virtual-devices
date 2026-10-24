@@ -64,6 +64,9 @@ def parser():
     s = inp.add_parser("key", help="press or release a control by its role, as a finger does")
     s.add_argument("role")
     s.add_argument("state", choices=["down", "up"])
+    s = inp.add_parser("keyboard", help="a key of a keyboard attached to the device, by its Linux name (left, enter…): not a control")
+    s.add_argument("key")
+    s.add_argument("state", choices=["down", "up"])
     s = inp.add_parser("tap", help="touch a display pixel")
     s.add_argument("x", type=int); s.add_argument("y", type=int)
     s.add_argument("--hold", type=int, default=80, metavar="MS")
@@ -192,7 +195,13 @@ def run(args):
         print(args.file)
     elif c == "input":
         q = qmp(inst)
-        if args.action == "key":
+        if args.action == "keyboard":
+            # QEMU's key code for a Linux key name: the same word, except where QEMU names it otherwise.
+            qcode = {"enter": "ret", "escape": "esc", "space": "spc", "leftshift": "shift",
+                     "leftctrl": "ctrl", "leftalt": "alt"}.get(args.key, args.key)
+            q.key(qcode, args.state == "down")
+            print(f"keyboard {args.key} {args.state}")
+        elif args.action == "key":
             qcodes = [k["qcode"] for k in compose.controls(inst.model) if k["role"] == args.role and k.get("qcode")]
             if not qcodes:
                 roles = sorted({k["role"] for k in compose.controls(inst.model)})
