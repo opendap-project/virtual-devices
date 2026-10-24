@@ -43,7 +43,8 @@ args = [
   # microSD socket, empty until a card is inserted (odap-vdev sd).
   "-device", "sdhci-pci", "-drive", "if=none,id=sdcard", "-device", "sd-card,id=sd0,drive=sdcard",
   # Headphone output (the T1's DACs) and the faceplate's main microphone: one output and one
-  # input stream, to and from the host's audio (on macOS, QEMU asks for the microphone the first
-  # time the guest records).
+  # input stream, to and from the host's audio. QEMU's CoreAudio backend has no input (QEMU 11),
+  # so on a macOS host the guest sees the microphone but recording fails with an I/O error; on a
+  # Linux host (PulseAudio) it records from the host's microphone.
   "-audiodev", "{host.audio},id=snd0", "-device", "virtio-sound-pci,audiodev=snd0,streams=2",
 ]
