@@ -109,9 +109,13 @@ class Instance:
     def ssh_argv(self, command=()):
         # One connection shared by every call (OpenSSH's multiplexing): a call opens a session on
         # it, with no new key exchange or login, and the connection stays a minute after the last.
-        # The socket's path is kept short (Unix sockets allow about 104 bytes on macOS, and ssh adds
-        # a suffix); %C is a hash of this user, host and port, so instances never share one.
-        mux = ["-o", "ControlMaster=auto", "-o", "ControlPath=/tmp/odap-ssh-%C", "-o", "ControlPersist=60"]
+        # The socket lives in ~/.ssh (only this user's: never a shared directory like /tmp, where
+        # another user could plant one) and its path is kept short (Unix sockets allow about 104
+        # bytes on macOS, and ssh adds a suffix); %C is a hash of this user, host and port, so
+        # instances never share one.
+        sockets = pathlib.Path.home() / ".ssh"
+        sockets.mkdir(mode=0o700, exist_ok=True)
+        mux = ["-o", "ControlMaster=auto", "-o", f"ControlPath={sockets}/odap-%C", "-o", "ControlPersist=60"]
         return ["ssh", "-i", str(workspace.dev_key()), "-p", str(self.ssh_port), *SSH_OPTS, *mux, "root@127.0.0.1", "--", *command]
 
     def ssh(self, *command, check=True, capture=True):

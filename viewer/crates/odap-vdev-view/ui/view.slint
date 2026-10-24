@@ -560,6 +560,19 @@ export component View inherits Window {
                     alignment: start;
 
                     Section {
+                        title: "SYSTEM";
+                        HorizontalLayout {
+                            spacing: 6px;
+                            // Restarts and power-off take a ready device, once: the one in flight
+                            // shows it, the others wait for it.
+                            Tool { icon: @image-url("icons/screenshot.svg"); label: "Save PNG"; busy: root.saving; busy-label: "Saving…"; width: (parent.width - 18px) / 4; clicked => { root.action("screenshot"); } }
+                            Tool { icon: @image-url("icons/restart.svg"); label: "Reboot"; enabled: root.phase == 2; busy: root.phase == 3 && !root.debug-reboot; busy-label: "Restarting…"; spin: true; width: (parent.width - 18px) / 4; clicked => { root.action("reboot"); } }
+                            Tool { icon: @image-url("icons/developer.svg"); label: "Debug"; enabled: root.phase == 2; busy: root.phase == 3 && root.debug-reboot; busy-label: "Restarting…"; width: (parent.width - 18px) / 4; clicked => { root.action("reboot-debug"); } }
+                            Tool { icon: @image-url("icons/power.svg"); label: "Power off"; enabled: root.phase == 2; busy: root.phase == 4; busy-label: "Powering off…"; width: (parent.width - 18px) / 4; danger: true; clicked => { root.action("poweroff"); } }
+                        }
+                    }
+
+                    Section {
                         title: "CONTROLS";
                         GridLayout {
                             spacing: 6px;
@@ -575,19 +588,6 @@ export component View inherits Window {
                             Row {
                                 Pill { colspan: 2; icon: @image-url("icons/screenshot.svg"); label: "Screenshot"; active: root.main-down && root.volume-down-down; detail: "Main + Vol − · hold: power menu"; down => { root.combo(true); } up => { root.combo(false); } }
                             }
-                        }
-                    }
-
-                    Section {
-                        title: "SYSTEM";
-                        HorizontalLayout {
-                            spacing: 6px;
-                            // Restarts and power-off take a ready device, once: the one in flight
-                            // shows it, the others wait for it.
-                            Tool { icon: @image-url("icons/screenshot.svg"); label: "Save PNG"; busy: root.saving; busy-label: "Saving…"; width: (parent.width - 18px) / 4; clicked => { root.action("screenshot"); } }
-                            Tool { icon: @image-url("icons/restart.svg"); label: "Reboot"; enabled: root.phase == 2; busy: root.phase == 3 && !root.debug-reboot; busy-label: "Restarting…"; spin: true; width: (parent.width - 18px) / 4; clicked => { root.action("reboot"); } }
-                            Tool { icon: @image-url("icons/developer.svg"); label: "Debug"; enabled: root.phase == 2; busy: root.phase == 3 && root.debug-reboot; busy-label: "Restarting…"; width: (parent.width - 18px) / 4; clicked => { root.action("reboot-debug"); } }
-                            Tool { icon: @image-url("icons/power.svg"); label: "Power off"; enabled: root.phase == 2; busy: root.phase == 4; busy-label: "Powering off…"; width: (parent.width - 18px) / 4; danger: true; clicked => { root.action("poweroff"); } }
                         }
                     }
 
