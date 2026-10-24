@@ -303,9 +303,9 @@ export component View inherits Window {
     in-out property <float> battery: 50;
     in property <bool> battery-known;
     in property <bool> battery-busy;
-    // The charge as the hardware reports it: the readout follows the output, while the slider
-    // sends the input without waiting for it.
-    in property <int> battery-read: -1;
+    // Fire and forget: the slider and its readout show what was sent, never the hardware's echo;
+    // the hardware's charge is read once, when the window opens (main.rs).
+    in-out property <bool> battery-seeded;
     in-out property <bool> battery-dragging;
     in property <int> charger;
     in property <int> sd;
@@ -536,7 +536,7 @@ export component View inherits Window {
                     HorizontalLayout {
                         spacing: 8px;
                         Image { source: @image-url("icons/battery.svg"); colorize: Palette.text; width: 16px; height: 16px; y: (parent.height - self.height) / 2; }
-                        Text { text: root.battery-read < 0 ? "– %" : root.battery-read + " %"; color: Palette.text; font-size: 12px; vertical-alignment: center; min-width: 34px; }
+                        Text { text: root.battery-known ? round(root.battery) + " %" : "– %"; color: Palette.text; font-size: 12px; vertical-alignment: center; min-width: 34px; }
                         Slider {
                             minimum: 0;
                             maximum: 100;

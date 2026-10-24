@@ -125,13 +125,18 @@ class Instance:
         if not image.is_file():
             raise InstanceError(f"no image at {image}: build it with toolkit-image odapkit-image build qemu")
         self.state.mkdir(parents=True, exist_ok=True)
+        # The disk is an overlay of one image: recreated when the image is another one. Its identity
+        # is the image's path, size and modification time when the overlay was made; the overlay's
+        # own time says nothing (it changes with every write while the device runs), and an overlay
+        # applied to a different base corrupts the file system.
         base_file = self.state / "disk.base"
-        if not self.disk.exists() or image.stat().st_mtime > self.disk.stat().st_mtime or \
-                (base_file.read_text() if base_file.exists() else "") != str(image):
+        st = image.stat()
+        identity = f"{image}\n{st.st_size}\n{st.st_mtime_ns}"
+        if not self.disk.exists() or (base_file.read_text() if base_file.exists() else "") != identity:
             self.disk.unlink(missing_ok=True)
             size = compose.storage_gb(self.model)
             subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", "-F", "raw", "-b", str(image), str(self.disk), f"{size}G"], check=True)
-            base_file.write_text(str(image))
+            base_file.write_text(identity)
         vars_fd = self.state / "vars.fd"
         if not vars_fd.exists():
             vars_fd.write_bytes(b"\0" * (64 << 20))

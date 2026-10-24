@@ -424,11 +424,13 @@ fn show(ui: &View, st: &device::State) {
     ui.set_charger(st.code(Attachment::Charger));
     ui.set_battery_known(st.battery.is_some());
     ui.set_battery_busy(st.battery_busy);
-    ui.set_battery_read(st.battery.map(i32::from).unwrap_or(-1));
+
+    // Read the hardware's charge once; after that the slider shows only what it sent.
     if let Some(p) = st.battery
-        && !ui.get_battery_dragging()
+        && !ui.get_battery_seeded()
     {
         ui.set_battery(p as f32);
+        ui.set_battery_seeded(true);
     }
     ui.set_saving(st.saving);
     ui.set_debug_reboot(st.debug_reboot);
