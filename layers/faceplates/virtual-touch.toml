@@ -65,7 +65,9 @@ resolution_y = 32768
 contacts = 10
 
 # kind, role, Linux code, edge, offset and length in mm, and the QEMU key (qcode) that produces the
-# code, which only the runner uses. The host keys after the buttons share their roles, so the
+# code, which only the runner uses. Offset: the control's centre, from the top of the display's
+# visible area; length: the key as it shows, bevels included. Both measured on the concept model's
+# meshes (case layer t1-concept-case; UNVERIFIED there). The host keys after the buttons share their roles, so the
 # simulator window can be driven from the keyboard.
 [[controls]]
 role = "action"
@@ -73,64 +75,64 @@ kind = "button"
 code = "KEY_PLAYPAUSE"
 qcode = "audioplay"
 edge = "left"
-offset_mm = 5.81
-length_mm = 12.85
+offset_mm = 5.82
+length_mm = 13.0
 [[controls]]
 role = "volume-up"
 kind = "rocker-half"
 code = "KEY_VOLUMEUP"
 qcode = "volumeup"
 edge = "left"
-offset_mm = 22.03
-length_mm = 10.71
+offset_mm = 22.01
+length_mm = 12.28
 [[controls]]
 role = "volume-down"
 kind = "rocker-half"
 code = "KEY_VOLUMEDOWN"
 qcode = "volumedown"
 edge = "left"
-offset_mm = 34.58
-length_mm = 10.71
+offset_mm = 34.63
+length_mm = 12.28
 [[controls]]
 role = "main"
 kind = "button"
 code = "KEY_POWER"
 qcode = "power"
 edge = "right"
-offset_mm = 13.77
-length_mm = 14.08
+offset_mm = 13.82
+length_mm = 15.8
 [[controls]]
 role = "action"
 kind = "button"
 code = "KEY_SPACE"
 qcode = "spc"
 edge = "left"
-offset_mm = 5.81
-length_mm = 12.85
+offset_mm = 5.82
+length_mm = 13.0
 [[controls]]
 role = "volume-up"
 kind = "button"
 code = "KEY_UP"
 qcode = "up"
 edge = "left"
-offset_mm = 22.03
-length_mm = 10.71
+offset_mm = 22.01
+length_mm = 12.28
 [[controls]]
 role = "volume-down"
 kind = "button"
 code = "KEY_DOWN"
 qcode = "down"
 edge = "left"
-offset_mm = 34.58
-length_mm = 10.71
+offset_mm = 34.63
+length_mm = 12.28
 [[controls]]
 role = "main"
 kind = "button"
 code = "KEY_P"
 qcode = "p"
 edge = "right"
-offset_mm = 13.77
-length_mm = 14.08
+offset_mm = 13.82
+length_mm = 15.8
 
 [qemu]
 args = [

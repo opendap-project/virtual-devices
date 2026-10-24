@@ -173,7 +173,12 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let live = LiveKeys::new(&a.qmp, qcode_of.iter().map(|(r, q)| (Role::from(r.as_str()), q.clone())).collect());
         std::thread::spawn(move || {
+            // ODAP_VIEW_TRACE=1: every control event, as sent, on stderr (window.log).
+            let trace = std::env::var_os("ODAP_VIEW_TRACE").is_some();
             for event in key_rx {
+                if trace {
+                    eprintln!("odap-vdev-view: {event:?}");
+                }
                 if let Err(e) = live.send(&event) {
                     eprintln!("odap-vdev-view: {}", e.message);
                 }
@@ -205,11 +210,21 @@ fn main() -> Result<(), slint::PlatformError> {
     let press = Rc::new(press);
     {
         let press = press.clone();
-        ui.on_key(move |role, down| press(role.as_str(), down));
+        let trace = std::env::var_os("ODAP_VIEW_TRACE").is_some();
+        ui.on_key(move |role, down| {
+            if trace {
+                eprintln!("odap-vdev-view: key {role} {down}");
+            }
+            press(role.as_str(), down)
+        });
     }
     {
         let press = press.clone();
+        let trace = std::env::var_os("ODAP_VIEW_TRACE").is_some();
         ui.on_combo(move |down| {
+            if trace {
+                eprintln!("odap-vdev-view: combo {down}");
+            }
             press("main", down);
             press("volume-down", down);
         });
@@ -217,7 +232,11 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         // The host keys the faceplate gives (Space, ↑, ↓, P): their role, by their qcode.
         let press = press.clone();
+        let trace = std::env::var_os("ODAP_VIEW_TRACE").is_some();
         ui.on_host_key(move |text, down| {
+            if trace {
+                eprintln!("odap-vdev-view: host key {:?} {down}", text.as_str());
+            }
             // ← and → are the window's own: Volume + and −, as ↑ and ↓ are.
             match text.as_str() {
                 "\u{F702}" => return press("volume-up", down),

@@ -71,11 +71,13 @@ component Pill inherits Rectangle {
             if root.glyph != "": Text { x: root.nudge; width: parent.width; text: root.glyph; color: root.accent && !touch.pressed ? Palette.action : Palette.text; font-size: 14px; vertical-alignment: center; horizontal-alignment: center; }
             if root.icon.width > 0: Image { x: (parent.width - self.width) / 2 + root.nudge; source: root.icon; colorize: Palette.text; width: 15px; height: 15px; }
         }
-        // The label at the left, just past the icon's slot, with a small gap.
+        // The label at the left, just past the icon's slot, with a small gap. Optical correction:
+        // the font's line box puts a lone label 1 px above centre (measured), so it moves down.
         VerticalLayout {
             alignment: center;
             horizontal-stretch: 1;
             padding-left: 2px;
+            padding-top: root.detail == "" ? 2px : 1px;
             padding-right: 12px;
             Text { text: root.label; color: Palette.text; font-size: 12px; overflow: elide; horizontal-alignment: left; }
             if root.detail != "": Text { text: root.detail; color: Palette.muted; font-size: 10px; overflow: elide; horizontal-alignment: left; }
