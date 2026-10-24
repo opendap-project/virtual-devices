@@ -325,7 +325,7 @@ export component View inherits Window {
     background: Palette.page;
 
     // The host keyboard drives the whole window, mouse or not. Plain keys are the device's
-    // controls and are held as long as the key is (the faceplate's host keys: Space, ↑, ↓, P, and ← → as ↑ ↓;
+    // controls and are held as long as the key is (the faceplate's host keys: Space, ↑, ↓, P; Enter as Space, ← → as ↑ ↓;
     // S holds Main + Vol −). With ⌘ they are the sidebar's actions, under the same rules as a
     // click: nothing in flight is asked twice, nothing disabled is taken. A key the OS repeats
     // while held is one press, as on the hardware.
@@ -619,7 +619,7 @@ export component View inherits Window {
                         title: "DEVICE · held as long as the key";
                         horizontal-stretch: 1;
                         alignment: start;
-                        Binding { keys: ["Space"]; does: "Action"; }
+                        Binding { keys: ["Space", "Enter"]; does: "Action (either)"; }
                         Binding { keys: ["P"]; does: "Main"; }
                         Binding { keys: ["←", "↑"]; does: "Volume + (either)"; }
                         Binding { keys: ["→", "↓"]; does: "Volume − (either)"; }

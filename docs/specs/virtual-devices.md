@@ -79,7 +79,7 @@ The keyboard drives the whole window, with the mouse or without it, and with the
 
 | Keys | Does |
 |---|---|
-| Space, P, ← or ↑, → or ↓ | Action, Main, Volume +, Volume −, held as long as the key |
+| Space or Enter, P, ← or ↑, → or ↓ | Action, Main, Volume +, Volume −, held as long as the key |
 | S | Screenshot (Main + Volume −), held |
 | ⌘S, ⌘R, ⌘⇧R, ⌘⇧P | Save PNG, reboot, reboot into debug, power off |
 | ⌘1 … ⌘4 | microSD, USB disk, USB DAC, charger, in or out |

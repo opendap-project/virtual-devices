@@ -247,8 +247,11 @@ fn main() -> Result<(), slint::PlatformError> {
             if trace {
                 eprintln!("odap-vdev-view: host key {:?} {down}", text.as_str());
             }
-            // ← and → are the window's own: Volume + and −, as ↑ and ↓ are.
+            // ← and → are the window's own: Volume + and −, as ↑ and ↓ are. Enter is Action, as
+            // Space is: the key that takes the default action or the focused element on a
+            // desktop; which of the two Action does is the device's to decide, not the key's.
             match text.as_str() {
+                "\n" | "\r" => return press("action", down),
                 "\u{F702}" => return press("volume-up", down),
                 "\u{F703}" => return press("volume-down", down),
                 _ => {}
