@@ -33,6 +33,9 @@ pub struct CaseKey {
     pub protrusion_mm: f32,
     pub shape: String,
     pub finish: String,
+    /// How far the key goes into the case when pressed (sideways, towards the case).
+    #[serde(default)]
+    pub travel_mm: f32,
     #[serde(default)]
     pub ribs: u32,
     #[serde(default)]
@@ -91,8 +94,22 @@ pub struct Drawn {
     pub size: (f32, f32),
     pub screen: Rect,
     pub keys: Vec<(String, Rect)>,
+    /// The case's keys, each drawn alone, to lay under the front: a pressed key slides into
+    /// the case by its travel, and the body covers what goes in.
+    pub sprites: Vec<Sprite>,
     /// The status LED's window: centre and diameter, in logical pixels (zero without one).
     pub led: (f32, f32, f32),
+}
+
+/// One key of the case, drawn alone (premultiplied RGBA at `scale`), where it sits in the front
+/// (logical pixels) and how far it moves when pressed (logical pixels, signed: towards the case).
+pub struct Sprite {
+    pub role: String,
+    pub rgba: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub rect: Rect,
+    pub travel: f32,
 }
 
 fn hex(s: &str) -> [f32; 3] {
@@ -179,6 +196,64 @@ fn bevelled(e: f32, bevel: f32, past: f32) -> f32 {
     }
 }
 
+/// A key's colour and coverage at `(mx, my)` device mm: its measured profile, straight on and
+/// projected to the plane (rectangles with their outer corners rounded by the bevel), satin metal
+/// with a soft band of light across it and the key light from above.
+fn key_pixel(case: &Case, key: &CaseKey, mx: f32, my: f32, k: f32) -> Option<([f32; 3], f32)> {
+    let aa = |d: f32| (d * k + 0.5).clamp(0.0, 1.0);
+    let sign = if key.side == "left" { -1.0 } else { 1.0 };
+    let out = sign * mx - case.width_mm / 2.0; // mm outside the wall
+    if out < -0.6 - key.travel_mm {
+        return None;
+    }
+    let along = my - key.y_mm;
+    let e = key_extent(key, along)?;
+    // The key continues into its slot as far as it travels, so a pressed key shows no gap.
+    let cover = aa(e - out) * aa(out + 0.6 + key.travel_mm);
+    if cover <= 0.0 {
+        return None;
+    }
+    let base = hex(if key.finish == "anodised-orange" { "#ff6a2a" } else { "#b4b9bf" });
+    let t = (out / e.max(0.1)).clamp(0.0, 1.0);
+    let rel = (along / (key.length_mm / 2.0)).clamp(-1.0, 1.0);
+    let shade = 0.72 + 0.42 * (std::f32::consts::PI * (0.15 + 0.7 * t)).sin() + 0.10 * rel;
+    Some(([base[0] * shade, base[1] * shade, base[2] * shade], cover))
+}
+
+/// Draws one key of the case alone.
+fn draw_key(case: &Case, key: &CaseKey, px_mm: f32, scale: f32, ox: f32, oy: f32) -> Sprite {
+    let k = px_mm * scale;
+    let sign = if key.side == "left" { -1.0 } else { 1.0 };
+    let wall = sign * case.width_mm / 2.0;
+    let reach = key.protrusion_mm + key.rib_height_mm + 0.2;
+    let inner = 0.6 + key.travel_mm;
+    let (x0, x1) = if sign < 0.0 { (wall - reach, wall + inner) } else { (wall - inner, wall + reach) };
+    let half = key.length_mm / 2.0 + key.bevel_mm + 0.2;
+    let (y0, y1) = (key.y_mm - half, key.y_mm + half);
+    let (width, height) = (((x1 - x0) * k).ceil() as u32, ((y1 - y0) * k).ceil() as u32);
+    let mut rgba = vec![0u8; (width * height * 4) as usize];
+    for py in 0..height {
+        for px in 0..width {
+            let (mx, my) = (x0 + (px as f32 + 0.5) / k, y1 - (py as f32 + 0.5) / k);
+            if let Some((c, a)) = key_pixel(case, key, mx, my, k) {
+                let i = ((py * width + px) * 4) as usize;
+                for j in 0..3 {
+                    rgba[i + j] = (c[j].clamp(0.0, 1.0) * a * 255.0).round() as u8;
+                }
+                rgba[i + 3] = (a * 255.0).round() as u8;
+            }
+        }
+    }
+    Sprite {
+        role: key.role.clone(),
+        rgba,
+        width,
+        height,
+        rect: Rect { x: (x0 + ox) * px_mm, y: (oy - y1) * px_mm, w: (x1 - x0) * px_mm, h: (y1 - y0) * px_mm },
+        travel: -sign * key.travel_mm * px_mm,
+    }
+}
+
 /// Draws the front at `px_mm` logical pixels per mm, `scale` pixels per logical pixel.
 pub fn draw(case: &Case, front: &Front, panel: &Panel, px_mm: f32, scale: f32) -> Drawn {
     let margin = case.keys.iter().map(|k| k.protrusion_mm + k.rib_height_mm).fold(0.0, f32::max) + 0.6;
@@ -189,8 +264,6 @@ pub fn draw(case: &Case, front: &Front, panel: &Panel, px_mm: f32, scale: f32) -
     let body = hex(&case.color);
     let surface = hex(&front.color);
     let glossy = front.surface == "glass";
-    let silver = hex("#b4b9bf");
-    let orange = hex("#ff6a2a");
     let (gw, gh, gr) = (case.width_mm - 2.0 * case.lip_mm, case.height_mm - 2.0 * case.lip_mm, case.radius_mm - case.lip_mm);
     let (dw, dh) = (panel.width_mm, panel.height_mm);
     let display = front.parts.iter().find(|p| p.kind == "display").cloned().unwrap_or_default();
@@ -205,31 +278,6 @@ pub fn draw(case: &Case, front: &Front, panel: &Panel, px_mm: f32, scale: f32) -
             let mut c = [0.0f32; 3];
             let mut alpha = 0.0f32;
             let aa = |d: f32| (d * k + 0.5).clamp(0.0, 1.0);
-
-            // The keys, beside the walls: their measured profile, straight on, projected to the
-            // plane (no perspective): rectangles with their outer corners rounded by the bevel.
-            for key in &case.keys {
-                let sign = if key.side == "left" { -1.0 } else { 1.0 };
-                let out = sign * mx - case.width_mm / 2.0; // mm outside the wall
-                if out < -0.6 {
-                    continue;
-                }
-                let along = my - key.y_mm;
-                if let Some(e) = key_extent(key, along) {
-                    let cover = aa(e - out) * aa(out + 0.6);
-                    if cover > 0.0 {
-                        let base = if key.finish == "anodised-orange" { orange } else { silver };
-                        // Satin metal: a soft band of light across the key, and the key light from above.
-                        let t = (out / e.max(0.1)).clamp(0.0, 1.0);
-                        let rel = (along / (key.length_mm / 2.0)).clamp(-1.0, 1.0);
-                        let shade = 0.72 + 0.42 * (std::f32::consts::PI * (0.15 + 0.7 * t)).sin() + 0.10 * rel;
-                        for i in 0..3 {
-                            c[i] = c[i] * (1.0 - cover) + base[i] * shade * cover;
-                        }
-                        alpha = alpha.max(cover);
-                    }
-                }
-            }
 
             // The body: one piece, its bevel lit from the upper left, the grip texture over it.
             let d = squircle(mx, my, case.width_mm, case.height_mm, case.radius_mm, case.squircle_n);
@@ -361,6 +409,7 @@ pub fn draw(case: &Case, front: &Front, panel: &Panel, px_mm: f32, scale: f32) -
         let (x, y) = to_logical(p.x_mm, p.y_mm);
         (x, y, p.d_mm * px_mm)
     }).unwrap_or_default();
+    let sprites = case.keys.iter().map(|key| draw_key(case, key, px_mm, scale, ox, oy)).collect();
     Drawn {
         rgba,
         width,
@@ -368,6 +417,7 @@ pub fn draw(case: &Case, front: &Front, panel: &Panel, px_mm: f32, scale: f32) -
         size: (cw * px_mm, ch * px_mm),
         screen: Rect { x: sx, y: sy, w: dw * px_mm, h: dh * px_mm },
         keys,
+        sprites,
         led: (lx, ly, ld),
     }
 }
@@ -388,7 +438,7 @@ mod tests {
 
     #[test]
     fn keys_stand_out_by_their_shape() {
-        let disc = CaseKey { role: "action".into(), side: "left".into(), y_mm: 0.0, length_mm: 13.0, protrusion_mm: 2.06, shape: "disc".into(), finish: String::new(), bevel_mm: 0.0, ribs: 0, rib_pitch_mm: 0.0, rib_height_mm: 0.0 };
+        let disc = CaseKey { role: "action".into(), side: "left".into(), y_mm: 0.0, length_mm: 13.0, protrusion_mm: 2.06, shape: "disc".into(), finish: String::new(), travel_mm: 0.0, bevel_mm: 0.0, ribs: 0, rib_pitch_mm: 0.0, rib_height_mm: 0.0 };
         assert!((key_extent(&disc, 0.0).unwrap() - 2.06).abs() < 1e-4);
         assert!(key_extent(&disc, 6.4).unwrap() < 2.06);
         assert!(key_extent(&disc, 7.0).is_none());
@@ -399,7 +449,7 @@ mod tests {
 
     #[test]
     fn a_volume_half_is_a_rectangle_with_rounded_outer_corners() {
-        let up = CaseKey { role: "volume-up".into(), side: "left".into(), y_mm: 0.0, length_mm: 11.375, bevel_mm: 0.45, protrusion_mm: 1.0, shape: "half-up".into(), finish: String::new(), ribs: 0, rib_pitch_mm: 0.0, rib_height_mm: 0.0 };
+        let up = CaseKey { role: "volume-up".into(), side: "left".into(), y_mm: 0.0, length_mm: 11.375, bevel_mm: 0.45, protrusion_mm: 1.0, shape: "half-up".into(), finish: String::new(), travel_mm: 0.0, ribs: 0, rib_pitch_mm: 0.0, rib_height_mm: 0.0 };
         // The measured profile: the face, then the bevel down to 0.55 mm at the very end.
         assert!((key_extent(&up, 0.0).unwrap() - 1.0).abs() < 1e-4);
         assert!((key_extent(&up, 11.375 / 2.0 + 0.45).unwrap() - 0.55).abs() < 1e-3);

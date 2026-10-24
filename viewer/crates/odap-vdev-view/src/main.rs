@@ -123,6 +123,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let framed = a.framed && doc.case.is_some() && doc.front.is_some();
     ui.set_framed(framed);
     let mut key_rects: Vec<(String, frame::Rect)> = Vec::new();
+    let mut sprites: Vec<frame::Sprite> = Vec::new();
     if let (true, Some(case), Some(front)) = (framed, doc.case.as_ref(), doc.front.as_ref()) {
         let panel = frame::Panel {
             width_mm: doc.display.width_mm,
@@ -140,6 +141,7 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.set_led_y(drawn.led.1);
         ui.set_led_d(drawn.led.2);
         key_rects = drawn.keys;
+        sprites = drawn.sprites;
     }
 
     // One key per role, with the shape the concept art gives it (T1-059).
@@ -153,7 +155,14 @@ fn main() -> Result<(), slint::PlatformError> {
             continue;
         }
         let r = key_rects.iter().find(|(role, _)| *role == c.role).map(|(_, r)| *r).unwrap_or_default();
-        keys.push(Key { role: c.role.clone().into(), x: r.x, y: r.y, w: r.w, h: r.h, pressed: false });
+        let mut key = Key { role: c.role.clone().into(), x: r.x, y: r.y, w: r.w, h: r.h, pressed: false, ..Default::default() };
+        if let Some(sp) = sprites.iter().find(|s| s.role == c.role) {
+            let buffer = SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(&sp.rgba, sp.width, sp.height);
+            key.sprite = slint::Image::from_rgba8_premultiplied(buffer);
+            key.has_sprite = true;
+            (key.sx, key.sy, key.sw, key.sh, key.travel) = (sp.rect.x, sp.rect.y, sp.rect.w, sp.rect.h, sp.travel);
+        }
+        keys.push(key);
         qcode_of.push((c.role.clone(), q));
     }
     let keys_model = Rc::new(VecModel::from(keys));

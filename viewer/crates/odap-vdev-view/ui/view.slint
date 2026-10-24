@@ -11,6 +11,16 @@ export struct Key {
     w: length,
     h: length,
     pressed: bool,
+    // A key of the case, drawn alone under the front: where it sits, and how far (signed) it
+    // slides towards the case when pressed. Without one (a faceplate's own control), pressing
+    // darkens it in place.
+    sprite: image,
+    has-sprite: bool,
+    sx: length,
+    sy: length,
+    sw: length,
+    sh: length,
+    travel: length,
 }
 
 export global Palette {
@@ -50,7 +60,7 @@ component Pill inherits Rectangle {
     border-width: 1px;
     border-color: root.accent ? Palette.action.with-alpha(0.7) : #ffffff10;
     // The icon in a square slot at the left, as far from the left edge as from the top and the
-    // bottom; the label centred in the space that remains.
+    // bottom; the label at the left of the space that remains.
     property <length> slot: root.height;
     // Optical correction: a mark whose weight sits left of its box (a dot in a round end, the
     // power glyph's open top) is moved right until it reads centred in the slot.
@@ -61,12 +71,14 @@ component Pill inherits Rectangle {
             if root.glyph != "": Text { x: root.nudge; width: parent.width; text: root.glyph; color: root.accent && !touch.pressed ? Palette.action : Palette.text; font-size: 14px; vertical-alignment: center; horizontal-alignment: center; }
             if root.icon.width > 0: Image { x: (parent.width - self.width) / 2 + root.nudge; source: root.icon; colorize: Palette.text; width: 15px; height: 15px; }
         }
+        // The label at the left, just past the icon's slot, with a small gap.
         VerticalLayout {
             alignment: center;
             horizontal-stretch: 1;
-            padding-right: 8px;
-            Text { text: root.label; color: Palette.text; font-size: 12px; overflow: elide; horizontal-alignment: center; }
-            if root.detail != "": Text { text: root.detail; color: Palette.muted; font-size: 10px; overflow: elide; horizontal-alignment: center; }
+            padding-left: 2px;
+            padding-right: 12px;
+            Text { text: root.label; color: Palette.text; font-size: 12px; overflow: elide; horizontal-alignment: left; }
+            if root.detail != "": Text { text: root.detail; color: Palette.muted; font-size: 10px; overflow: elide; horizontal-alignment: left; }
         }
     }
     touch := TouchArea {
@@ -345,6 +357,19 @@ export component View inherits Window {
         Rectangle {
             width: root.framed ? root.front-w : root.screen-w;
             height: root.framed ? root.front-h : root.screen-h;
+            // The case's keys, under the front: pressed, a key slides sideways into the case, as
+            // on the hardware, and the body covers what goes in.
+            if root.framed: Rectangle {
+                for k in root.keys: Image {
+                    visible: k.has-sprite;
+                    x: k.sx + (k.pressed ? k.travel : 0);
+                    y: k.sy;
+                    width: k.sw;
+                    height: k.sh;
+                    source: k.sprite;
+                    animate x { duration: 40ms; easing: ease-out; }
+                }
+            }
             if root.framed: Image {
                 x: 0;
                 y: 0;
@@ -359,8 +384,9 @@ export component View inherits Window {
                     width: k.w;
                     height: k.h;
                     border-radius: 3px;
-                    // Pressed: the key sinks into its pocket; hovered: a faint light on it.
-                    background: k.pressed ? #00000070 : (key-touch.has-hover ? #ffffff24 : transparent);
+                    // A case key moves when pressed (above); a faceplate control darkens in place.
+                    // Hovered: a faint light on it.
+                    background: k.pressed && !k.has-sprite ? #00000070 : (key-touch.has-hover ? #ffffff18 : transparent);
                     key-touch := TouchArea {
                         mouse-cursor: pointer;
                         pointer-event(e) => {
