@@ -51,12 +51,14 @@ component Pill inherits Rectangle {
     // A second line: how the hardware does it (a combination), and what holding it does.
     in property <string> detail;
     in property <bool> accent;
+    // Down, whatever pressed it: this pill, the drawn key, a host key (main.rs).
+    in property <bool> active;
     callback down();
     callback up();
     height: root.detail == "" ? 34px : 44px;
     min-width: 0;
     border-radius: root.detail == "" ? 17px : 12px;
-    background: touch.pressed ? (root.accent ? Palette.action : Palette.line.brighter(50%)) : (touch.has-hover ? Palette.line.brighter(22%) : Palette.line);
+    background: touch.pressed || root.active ? (root.accent ? Palette.action : Palette.line.brighter(50%)) : (touch.has-hover ? Palette.line.brighter(22%) : Palette.line);
     border-width: 1px;
     border-color: root.accent ? Palette.action.with-alpha(0.7) : #ffffff10;
     // The icon in a square slot at the left, as far from the left edge as from the top and the
@@ -68,7 +70,7 @@ component Pill inherits Rectangle {
     HorizontalLayout {
         Rectangle {
             width: root.slot;
-            if root.glyph != "": Text { x: root.nudge; width: parent.width; text: root.glyph; color: root.accent && !touch.pressed ? Palette.action : Palette.text; font-size: 14px; vertical-alignment: center; horizontal-alignment: center; }
+            if root.glyph != "": Text { x: root.nudge; width: parent.width; text: root.glyph; color: root.accent && !(touch.pressed || root.active) ? Palette.action : Palette.text; font-size: 14px; vertical-alignment: center; horizontal-alignment: center; }
             if root.icon.width > 0: Image { x: (parent.width - self.width) / 2 + root.nudge; source: root.icon; colorize: Palette.text; width: 15px; height: 15px; }
         }
         // The label at the left, just past the icon's slot, with a small gap. Optical correction:
@@ -282,6 +284,11 @@ export component View inherits Window {
     in property <length> led-y;
     in property <length> led-d;
     in-out property <[Key]> keys;
+    // Which controls are down, whatever pressed them (main.rs), for the sidebar's pills.
+    in property <bool> action-down;
+    in property <bool> main-down;
+    in property <bool> volume-up-down;
+    in property <bool> volume-down-down;
     // The status LED's colour, transparent while off (the virtual board's LED adapter drives it).
     in property <color> led: transparent;
     in-out property <bool> sidebar: true;
@@ -508,15 +515,15 @@ export component View inherits Window {
                         spacing: 6px;
                         width: parent.width;
                         Row {
-                            Pill { glyph: "●"; nudge: 2px; label: "Action"; accent: true; down => { root.key("action", true); } up => { root.key("action", false); } }
-                            Pill { icon: @image-url("icons/power.svg"); nudge: 2px; label: "Main"; down => { root.key("main", true); } up => { root.key("main", false); } }
+                            Pill { glyph: "●"; nudge: 2px; label: "Action"; accent: true; active: root.action-down; down => { root.key("action", true); } up => { root.key("action", false); } }
+                            Pill { icon: @image-url("icons/power.svg"); nudge: 2px; label: "Main"; active: root.main-down; down => { root.key("main", true); } up => { root.key("main", false); } }
                         }
                         Row {
-                            Pill { glyph: "+"; label: "Volume"; down => { root.key("volume-up", true); } up => { root.key("volume-up", false); } }
-                            Pill { glyph: "−"; label: "Volume"; down => { root.key("volume-down", true); } up => { root.key("volume-down", false); } }
+                            Pill { glyph: "+"; label: "Volume"; active: root.volume-up-down; down => { root.key("volume-up", true); } up => { root.key("volume-up", false); } }
+                            Pill { glyph: "−"; label: "Volume"; active: root.volume-down-down; down => { root.key("volume-down", true); } up => { root.key("volume-down", false); } }
                         }
                         Row {
-                            Pill { colspan: 2; icon: @image-url("icons/screenshot.svg"); label: "Screenshot"; detail: "Main + Vol − · hold: power menu"; down => { root.combo(true); } up => { root.combo(false); } }
+                            Pill { colspan: 2; icon: @image-url("icons/screenshot.svg"); label: "Screenshot"; active: root.main-down && root.volume-down-down; detail: "Main + Vol − · hold: power menu"; down => { root.combo(true); } up => { root.combo(false); } }
                         }
                     }
                 }

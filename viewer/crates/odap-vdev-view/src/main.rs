@@ -187,6 +187,7 @@ fn main() -> Result<(), slint::PlatformError> {
     }
     let press = {
         let keys_model = keys_model.clone();
+        let weak = ui.as_weak();
         move |role: &str, down: bool| {
             // Already so (a key the OS repeats, the mouse and a key on the same control): nothing.
             let same = (0..keys_model.row_count())
@@ -198,6 +199,15 @@ fn main() -> Result<(), slint::PlatformError> {
             let role = Role::from(role);
             let _ = key_tx.send(if down { InputEvent::KeyDown { role: role.clone() } } else { InputEvent::KeyUp { role: role.clone() } });
             let role = role.as_str();
+            if let Some(ui) = weak.upgrade() {
+                match role {
+                    "action" => ui.set_action_down(down),
+                    "main" => ui.set_main_down(down),
+                    "volume-up" => ui.set_volume_up_down(down),
+                    "volume-down" => ui.set_volume_down_down(down),
+                    _ => {}
+                }
+            }
             for i in 0..keys_model.row_count() {
                 let mut k = keys_model.row_data(i).unwrap();
                 if k.role == role {
