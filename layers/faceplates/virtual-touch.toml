@@ -36,6 +36,18 @@ bezel_color = "#0b0c0e"
 action_color = "#ff6a2a"
 key_color = "#aab0b6"
 key_depth_mm = 1.6
+# Front details, seen from the front (FPT-023, FPT-024): above the display the ambient light
+# sensor centred and the status LED to its right, not in the corner; the main microphone centred
+# below the display. Offsets from the body's top-left corner; sizes are guesses (UNVERIFIED).
+als_x_mm = 27.0
+als_y_mm = 3.0
+als_d_mm = 1.6
+led_x_mm = 40.0
+led_y_mm = 3.0
+led_d_mm = 1.4
+mic_x_mm = 27.0
+mic_y_mm = 82.6
+mic_d_mm = 0.9
 
 [touch]
 resolution_x = 32768

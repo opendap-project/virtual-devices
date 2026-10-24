@@ -41,6 +41,24 @@ struct Frame {
     action_color: String,
     key_color: String,
     key_depth_mm: f32,
+    #[serde(default)]
+    als_x_mm: f32,
+    #[serde(default)]
+    als_y_mm: f32,
+    #[serde(default)]
+    als_d_mm: f32,
+    #[serde(default)]
+    led_x_mm: f32,
+    #[serde(default)]
+    led_y_mm: f32,
+    #[serde(default)]
+    led_d_mm: f32,
+    #[serde(default)]
+    mic_x_mm: f32,
+    #[serde(default)]
+    mic_y_mm: f32,
+    #[serde(default)]
+    mic_d_mm: f32,
 }
 
 #[derive(Deserialize)]
@@ -181,6 +199,18 @@ fn main() -> Result<(), slint::PlatformError> {
     ui.set_display_y(f.display_y_mm * px_mm);
     ui.set_display_radius(f.display_radius_mm * px_mm);
     ui.set_key_depth(f.key_depth_mm * px_mm);
+    ui.set_details(Details {
+        als_x: f.als_x_mm * px_mm,
+        als_y: f.als_y_mm * px_mm,
+        als_d: f.als_d_mm * px_mm,
+        led_x: f.led_x_mm * px_mm,
+        led_y: f.led_y_mm * px_mm,
+        led_d: f.led_d_mm * px_mm,
+        mic_x: f.mic_x_mm * px_mm,
+        mic_y: f.mic_y_mm * px_mm,
+        mic_d: f.mic_d_mm * px_mm,
+        mm: px_mm,
+    });
     let palette = ui.global::<Palette>();
     palette.set_body(color(&f.body_color));
     palette.set_bezel(color(&f.bezel_color));

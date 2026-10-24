@@ -54,11 +54,15 @@
 
 On macOS the window belongs to an app bundle named after the model ("Virtual T1"), with the OpenDAP app icon, which gives it a name in the Dock and lets automation address it.
 
-The window is the simulator window ([ADR 0001](../adr/0001-simulator-window.md)): the display, framed by the device (schematic until the case exports its geometry), and a sidebar that folds away. The sidebar holds:
+The window is the simulator window ([ADR 0001](../adr/0001-simulator-window.md)): the display, framed by the front of the device, and a sidebar that folds away.
+
+The frame is schematic until the case exports its geometry. It shows the body, the display glass, the four controls as the concept art shapes them, and the front details the touch faceplate places (FPT-023, FPT-024): the ambient light sensor centred above the display, the status LED to its right, and the microphone centred below it. The status LED lights in the colour the virtual board's LED adapter gives it.
+
+The sidebar fits without scrolling, with the design system's icons. It holds:
 
 - the controls, held while the mouse button is down, and the combination Main + Volume −;
-- the battery level and the charger;
-- microSD, USB disk and USB DAC in and out;
+- the battery level and the charger, as a slider and a switch;
+- microSD, USB disk and USB DAC, as switches;
 - screenshot, reboot, debug boot and power off.
 
 The display takes the pointer as a finger, the drawn buttons press, and the host keys the faceplate names (Space, ↑, ↓, P) press their roles. `--no-frame` shows the display alone. `odap-vdev window` opens it for a running device, and `ODAP_VIEW_SNAPSHOT=FILE.png` saves the window as drawn, for checks without a person. QEMU's own window remains with `ODAP_WINDOW=qemu`.
