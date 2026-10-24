@@ -60,10 +60,10 @@ The frame is schematic until the case exports its geometry. It shows the body, t
 
 The sidebar fits without scrolling, with the design system's icons. It holds:
 
-- the controls, held while the mouse button is down, and the combination Main + Volume −;
+- the controls, held while the mouse button is down, and Screenshot, which is the combination Main + Volume − (held 2 s, the power menu), so the gesture itself is tested;
 - the battery level and the charger, as a slider and a switch;
 - microSD, USB disk and USB DAC, as switches;
-- screenshot, reboot, debug boot and power off.
+- Save PNG (the display as the host sees it, to the Desktop, without the OS), reboot, debug boot and power off.
 
 The display takes the pointer as a finger, the drawn buttons press, and the host keys the faceplate names (Space, ↑, ↓, P) press their roles. `--no-frame` shows the display alone. `odap-vdev window` opens it for a running device, and `ODAP_VIEW_SNAPSHOT=FILE.png` saves the window as drawn, for checks without a person. QEMU's own window remains with `ODAP_WINDOW=qemu`.
 

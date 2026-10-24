@@ -48,11 +48,14 @@ component Pill inherits Rectangle {
     in property <string> glyph;
     in property <image> icon;
     in property <string> label;
+    // A second line: how the hardware does it (a combination), and what holding it does.
+    in property <string> detail;
     in property <bool> accent;
     callback down();
     callback up();
-    height: 34px;
-    border-radius: 17px;
+    height: root.detail == "" ? 34px : 44px;
+    min-width: 0;
+    border-radius: root.detail == "" ? 17px : 12px;
     background: touch.pressed ? (root.accent ? Palette.action : Palette.line.brighter(50%)) : Palette.line;
     border-width: 1px;
     border-color: root.accent ? Palette.action.with-alpha(0.7) : #ffffff10;
@@ -63,7 +66,11 @@ component Pill inherits Rectangle {
         alignment: center;
         if root.glyph != "": Text { text: root.glyph; color: root.accent && !touch.pressed ? Palette.action : Palette.text; font-size: 14px; vertical-alignment: center; }
         if root.icon.width > 0: Image { source: root.icon; colorize: Palette.text; width: 15px; height: 15px; y: (parent.height - self.height) / 2; }
-        Text { text: root.label; color: Palette.text; font-size: 12px; vertical-alignment: center; }
+        VerticalLayout {
+            alignment: center;
+            Text { text: root.label; color: Palette.text; font-size: 12px; overflow: elide; }
+            if root.detail != "": Text { text: root.detail; color: Palette.muted; font-size: 10px; overflow: elide; }
+        }
     }
     touch := TouchArea {
         mouse-cursor: pointer;
@@ -106,22 +113,38 @@ component Toggle inherits Rectangle {
     TouchArea { mouse-cursor: pointer; clicked => { root.on = !root.on; root.changed(); } }
 }
 
-// A system action: a glyph above a short label.
-component Tool inherits Rectangle {
+// A system action: an icon button, its label below it, outside the button, so a longer label
+// never crowds the icon.
+component Tool inherits VerticalLayout {
     in property <image> icon;
     in property <string> label;
     in property <bool> danger;
     callback clicked();
-    height: 52px;
-    border-radius: 8px;
-    background: touch.pressed ? Palette.line.brighter(50%) : Palette.line;
-    VerticalLayout {
-        alignment: center;
-        spacing: 2px;
-        HorizontalLayout { alignment: center; Image { source: root.icon; colorize: root.danger ? #e5484d : Palette.text; width: 18px; height: 18px; } }
-        Text { text: root.label; color: Palette.muted; font-size: 10px; horizontal-alignment: center; }
+    spacing: 4px;
+    Rectangle {
+        height: 40px;
+        border-radius: 8px;
+        background: touch.pressed ? Palette.line.brighter(50%) : Palette.line;
+        accessible-role: button;
+        accessible-label: root.label;
+        accessible-action-default => { root.clicked(); }
+        Image {
+            source: root.icon;
+            colorize: root.danger ? #e5484d : Palette.text;
+            width: 18px;
+            height: 18px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+        }
+        touch := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
     }
-    touch := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    Text {
+        text: root.label;
+        color: root.danger ? #e5484d : Palette.muted;
+        font-size: 10px;
+        horizontal-alignment: center;
+        wrap: word-wrap;
+    }
 }
 
 export component View inherits Window {
@@ -318,6 +341,7 @@ export component View inherits Window {
                     title: "CONTROLS · hold to hold";
                     GridLayout {
                         spacing: 6px;
+                        width: parent.width;
                         Row {
                             Pill { glyph: "●"; label: "Action"; accent: true; down => { root.key("action", true); } up => { root.key("action", false); } }
                             Pill { icon: @image-url("icons/power.svg"); label: "Main"; down => { root.key("main", true); } up => { root.key("main", false); } }
@@ -327,7 +351,7 @@ export component View inherits Window {
                             Pill { glyph: "−"; label: "Volume"; down => { root.key("volume-down", true); } up => { root.key("volume-down", false); } }
                         }
                         Row {
-                            Pill { colspan: 2; icon: @image-url("icons/screenshot.svg"); label: "Main + Volume −"; down => { root.combo(true); } up => { root.combo(false); } }
+                            Pill { colspan: 2; icon: @image-url("icons/screenshot.svg"); label: "Screenshot"; detail: "Main + Vol − · hold: power menu"; down => { root.combo(true); } up => { root.combo(false); } }
                         }
                     }
                 }
@@ -359,7 +383,7 @@ export component View inherits Window {
                     title: "SYSTEM";
                     HorizontalLayout {
                         spacing: 6px;
-                        Tool { icon: @image-url("icons/screenshot.svg"); label: "Capture"; width: (parent.width - 18px) / 4; clicked => { root.action("screenshot"); } }
+                        Tool { icon: @image-url("icons/screenshot.svg"); label: "Save PNG"; width: (parent.width - 18px) / 4; clicked => { root.action("screenshot"); } }
                         Tool { icon: @image-url("icons/restart.svg"); label: "Reboot"; width: (parent.width - 18px) / 4; clicked => { root.action("reboot"); } }
                         Tool { icon: @image-url("icons/developer.svg"); label: "Debug"; width: (parent.width - 18px) / 4; clicked => { root.action("reboot-debug"); } }
                         Tool { icon: @image-url("icons/power.svg"); label: "Power off"; width: (parent.width - 18px) / 4; danger: true; clicked => { root.action("poweroff"); } }
