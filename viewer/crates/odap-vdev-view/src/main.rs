@@ -275,11 +275,18 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let run = run.clone();
         let weak = ui.as_weak();
+        let state = a.frame.parent().map(PathBuf::from).unwrap_or_default();
         ui.on_action(move |what| {
             let shots = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join("Desktop");
-            let blank = std::env::temp_dir().join("odap-vdev-blank.img");
+            // A blank card or disk, in the instance's own state directory (beside frame.json),
+            // never in a shared temporary directory; created only if it is not there.
+            let blank = state.join("blank.img");
             if !blank.exists() {
-                let _ = std::fs::File::create(&blank).and_then(|f| f.set_len(64 << 20));
+                let _ = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&blank)
+                    .and_then(|f| f.set_len(64 << 20));
             }
             let blank = blank.display().to_string();
             let shot = shots.join(format!("{}.png", what.as_str())).display().to_string();
