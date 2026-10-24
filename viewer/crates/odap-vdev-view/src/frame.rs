@@ -27,12 +27,12 @@ pub struct CaseKey {
     pub side: String,
     pub y_mm: f32,
     pub length_mm: f32,
+    /// The rounded bevel around the face, beyond its length.
+    #[serde(default)]
+    pub bevel_mm: f32,
     pub protrusion_mm: f32,
     pub shape: String,
     pub finish: String,
-    /// A half capsule's round cap at its outer end (`half-up`: the top, `half-down`: the bottom).
-    #[serde(default)]
-    pub cap_radius_mm: f32,
     #[serde(default)]
     pub ribs: u32,
     #[serde(default)]
@@ -131,7 +131,7 @@ fn grain(x: u32, y: u32) -> f32 {
 /// How far a key stands out of the wall at `along` mm from its centre, or `None` past its ends:
 /// the silhouette its shape gives it seen from the front.
 fn key_extent(k: &CaseKey, along: f32) -> Option<f32> {
-    let half = k.length_mm / 2.0;
+    let half = k.length_mm / 2.0 + if k.shape == "disc" { 0.0 } else { k.bevel_mm };
     let a = along.abs();
     if a > half {
         return None;
@@ -153,8 +153,7 @@ fn key_extent(k: &CaseKey, along: f32) -> Option<f32> {
         }
         // Main's pill, with its crests across it.
         "pill" => {
-            let edge = 0.4;
-            let base = if a > half - edge { e * (1.0 - ((a - (half - edge)) / edge).powi(2)).max(0.0).sqrt() } else { e };
+            let base = bevelled(e, k.bevel_mm, a - k.length_mm / 2.0);
             let mut z = base;
             for i in 0..k.ribs {
                 let c = (i as f32 - (k.ribs as f32 - 1.0) / 2.0) * k.rib_pitch_mm;
@@ -165,19 +164,19 @@ fn key_extent(k: &CaseKey, along: f32) -> Option<f32> {
             }
             z
         }
-        // A half capsule: its outer end the capsule's round cap, as the front of the model shows
-        // it (the cap's curve over its radius), its end at the split square, eased by the 0.45 mm
-        // bevel.
-        _ => {
-            let outer = match k.shape.as_str() {
-                "half-up" => along > 0.0,
-                "half-down" => along < 0.0,
-                _ => false,
-            };
-            let edge = if outer { k.cap_radius_mm.max(0.45) } else { 0.45 };
-            if a > half - edge { e * (1.0 - ((a - (half - edge)) / edge).powi(2)).max(0.0).sqrt() } else { e }
-        }
+        // A half capsule: the face, then its bevel down to the extrusion's side.
+        _ => bevelled(e, k.bevel_mm, a - k.length_mm / 2.0),
     })
+}
+
+/// A face `e` out of the wall whose rounded bevel of `bevel` mm starts `past` mm beyond its end
+/// (negative: on the face).
+fn bevelled(e: f32, bevel: f32, past: f32) -> f32 {
+    if past <= 0.0 || bevel <= 0.0 {
+        e
+    } else {
+        e - bevel + (bevel * bevel - past.min(bevel).powi(2)).max(0.0).sqrt()
+    }
 }
 
 /// Draws the front at `px_mm` logical pixels per mm, `scale` pixels per logical pixel.
@@ -207,21 +206,23 @@ pub fn draw(case: &Case, front: &Front, panel: &Panel, px_mm: f32, scale: f32) -
             let mut alpha = 0.0f32;
             let aa = |d: f32| (d * k + 0.5).clamp(0.0, 1.0);
 
-            // The keys, beside the walls.
+            // The keys, beside the walls: their measured profile, straight on, projected to the
+            // plane (no perspective): rectangles with their outer corners rounded by the bevel.
             for key in &case.keys {
                 let sign = if key.side == "left" { -1.0 } else { 1.0 };
                 let out = sign * mx - case.width_mm / 2.0; // mm outside the wall
                 if out < -0.6 {
                     continue;
                 }
-                if let Some(e) = key_extent(key, my - key.y_mm) {
+                let along = my - key.y_mm;
+                if let Some(e) = key_extent(key, along) {
                     let cover = aa(e - out) * aa(out + 0.6);
                     if cover > 0.0 {
                         let base = if key.finish == "anodised-orange" { orange } else { silver };
                         // Satin metal: a soft band of light across the key, and the key light from above.
                         let t = (out / e.max(0.1)).clamp(0.0, 1.0);
-                        let along = ((my - key.y_mm) / (key.length_mm / 2.0)).clamp(-1.0, 1.0);
-                        let shade = 0.72 + 0.42 * (std::f32::consts::PI * (0.15 + 0.7 * t)).sin() + 0.10 * along;
+                        let rel = (along / (key.length_mm / 2.0)).clamp(-1.0, 1.0);
+                        let shade = 0.72 + 0.42 * (std::f32::consts::PI * (0.15 + 0.7 * t)).sin() + 0.10 * rel;
                         for i in 0..3 {
                             c[i] = c[i] * (1.0 - cover) + base[i] * shade * cover;
                         }
@@ -343,8 +344,9 @@ pub fn draw(case: &Case, front: &Front, panel: &Panel, px_mm: f32, scale: f32) -
             let wall = sign * case.width_mm / 2.0;
             let tip = wall + sign * (key.protrusion_mm + key.rib_height_mm + 0.4);
             let (x0, x1) = if sign < 0.0 { (tip, wall + 0.6) } else { (wall - 0.6, tip) };
-            let (lx, ly) = to_logical(x0, key.y_mm + key.length_mm / 2.0);
-            (key.role.clone(), Rect { x: lx, y: ly, w: (x1 - x0) * px_mm, h: key.length_mm * px_mm })
+            let len = key.length_mm + 2.0 * key.bevel_mm;
+            let (lx, ly) = to_logical(x0, key.y_mm + len / 2.0);
+            (key.role.clone(), Rect { x: lx, y: ly, w: (x1 - x0) * px_mm, h: len * px_mm })
         })
         .collect();
     // The faceplate's own controls are pressed where they are, like the case's keys.
@@ -386,12 +388,21 @@ mod tests {
 
     #[test]
     fn keys_stand_out_by_their_shape() {
-        let disc = CaseKey { role: "action".into(), side: "left".into(), y_mm: 0.0, length_mm: 13.0, protrusion_mm: 2.06, shape: "disc".into(), finish: String::new(), ribs: 0, rib_pitch_mm: 0.0, rib_height_mm: 0.0 };
+        let disc = CaseKey { role: "action".into(), side: "left".into(), y_mm: 0.0, length_mm: 13.0, protrusion_mm: 2.06, shape: "disc".into(), finish: String::new(), bevel_mm: 0.0, ribs: 0, rib_pitch_mm: 0.0, rib_height_mm: 0.0 };
         assert!((key_extent(&disc, 0.0).unwrap() - 2.06).abs() < 1e-4);
         assert!(key_extent(&disc, 6.4).unwrap() < 2.06);
         assert!(key_extent(&disc, 7.0).is_none());
-        let pill = CaseKey { shape: "pill".into(), length_mm: 15.0, protrusion_mm: 0.85, ribs: 5, rib_pitch_mm: 1.8, rib_height_mm: 0.29, ..disc };
+        let pill = CaseKey { shape: "pill".into(), length_mm: 15.0, bevel_mm: 0.4, protrusion_mm: 0.85, ribs: 5, rib_pitch_mm: 1.8, rib_height_mm: 0.29, ..disc };
         assert!(key_extent(&pill, 0.0).unwrap() > 0.85);
         assert!((key_extent(&pill, 0.9).unwrap() - 0.85).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_volume_half_is_a_rectangle_with_rounded_outer_corners() {
+        let up = CaseKey { role: "volume-up".into(), side: "left".into(), y_mm: 0.0, length_mm: 11.375, bevel_mm: 0.45, protrusion_mm: 1.0, shape: "half-up".into(), finish: String::new(), ribs: 0, rib_pitch_mm: 0.0, rib_height_mm: 0.0 };
+        // The measured profile: the face, then the bevel down to 0.55 mm at the very end.
+        assert!((key_extent(&up, 0.0).unwrap() - 1.0).abs() < 1e-4);
+        assert!((key_extent(&up, 11.375 / 2.0 + 0.45).unwrap() - 0.55).abs() < 1e-3);
+        assert!(key_extent(&up, 11.375 / 2.0 + 0.5).is_none());
     }
 }
