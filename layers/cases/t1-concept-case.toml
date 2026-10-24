@@ -29,7 +29,7 @@ texture = "grip"
 # (across the case's thickness, centred on its mid-plane) of their face, the bevel around the face,
 # how far the face stands out of the wall, their shape and finish, and marks in relief.
 # The keys sit 4.964 mm lower than in the concept model (maintainers, 2026-10-23): Action's top edge
-# meets the bottom line of the shell's status bar (28 design px, 4.284 mm on this display), and the
+# meets the bottom line of the OS Shell's status bar (28 design px, 4.284 mm on this display), and the
 # others keep their places relative to it.
 # travel_mm is how far a key goes into the case when pressed, sideways: set by eye (UNVERIFIED);
 # T1-022 states only that Action travels deeper than the others, which travel short.

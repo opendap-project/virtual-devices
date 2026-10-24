@@ -46,7 +46,7 @@ def parser():
     ui = sub.add_parser("ui", help="the device's interface options for development").add_subparsers(dest="action", required=True)
     s = ui.add_parser("debug", help="the debug UI mode (blueprint), or turn it on or off, in place: nothing restarts")
     s.add_argument("state", nargs="?", choices=["on", "off"])
-    s = ui.add_parser("activity", help="the activity the shell starts in place of the product, kept across reboots, or 'off' (the shell restarts)")
+    s = ui.add_parser("activity", help="the activity the composer starts in place of the product, kept across reboots, or 'off' (the composer restarts)")
     s.add_argument("name", nargs="?", help="for example ui-primitives, or off")
     s = sub.add_parser("hw", help="the virtual hardware's physical state: card, USB, charger, battery")
     s.add_argument("--json", action="store_true")
@@ -188,22 +188,22 @@ def run(args):
             print(f"  image: {st['image']['path']} ({'present' if st['image']['present'] else 'missing'})")
     elif c == "ui" and args.action == "activity":
         # A drop-in, so the choice survives a reboot (the /run flag lasts one boot).
-        dropin = "/etc/systemd/system/odap-shell.service.d/activity.conf"
+        dropin = "/etc/systemd/system/odap-composer.service.d/activity.conf"
         if args.name == "off":
-            inst.ssh(f"rm -f {dropin} /run/opendap/activity && systemctl daemon-reload && systemctl restart odap-shell")
+            inst.ssh(f"rm -f {dropin} /run/opendap/activity && systemctl daemon-reload && systemctl restart odap-composer")
         elif args.name:
             if not re.fullmatch(r"[a-z0-9-]+", args.name):
                 sys.exit(f"odap-vdev: not an activity name: {args.name}")
             inst.ssh(f"mkdir -p {dropin.rsplit('/', 1)[0]} && printf '[Service]\\nEnvironment=ODAP_ACTIVITY={args.name}\\n' > {dropin}"
-                     " && systemctl daemon-reload && systemctl restart odap-shell")
-        r = inst.ssh("systemctl show -p Environment odap-shell | grep -o 'ODAP_ACTIVITY=[^ ]*' | cut -d= -f2; cat /run/opendap/activity 2>/dev/null", check=False)
+                     " && systemctl daemon-reload && systemctl restart odap-composer")
+        r = inst.ssh("systemctl show -p Environment odap-composer | grep -o 'ODAP_ACTIVITY=[^ ]*' | cut -d= -f2; cat /run/opendap/activity 2>/dev/null", check=False)
         print(r.stdout.split()[0] if r.stdout.split() else "off (the product)")
     elif c == "ui":
         if args.state:
-            # The switch file overrides the board's default; the shell and the activity watch it and
+            # The switch file overrides the board's default; the composer and the activity watch it and
             # switch in place: nothing restarts, so the mode looks at whatever state is on screen.
             inst.ssh(f"echo {1 if args.state == 'on' else 0} > /run/opendap/debug-ui")
-        r = inst.ssh("cat /run/opendap/debug-ui 2>/dev/null || (systemctl show -p Environment odap-shell | grep -q 'ODAP_DEBUG_UI=1' && echo 1 || echo 0)", check=False)
+        r = inst.ssh("cat /run/opendap/debug-ui 2>/dev/null || (systemctl show -p Environment odap-composer | grep -q 'ODAP_DEBUG_UI=1' && echo 1 || echo 0)", check=False)
         print("on" if r.stdout.strip() == "1" else "off")
     elif c == "hw":
         hw = inst.hardware()

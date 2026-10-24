@@ -369,7 +369,7 @@ fn main() -> Result<(), slint::PlatformError> {
     };
     let writer = Arc::new(Mutex::new(writer));
     {
-        // The pointer over the display, pressed or not, so the shell's touch indicator follows it.
+        // The pointer over the display, pressed or not, so the composer's touch indicator follows it.
         let writer = writer.clone();
         let down = std::cell::Cell::new(false);
         ui.on_screen_pointer(move |kind, x, y| {

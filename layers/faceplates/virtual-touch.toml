@@ -150,10 +150,10 @@ length_mm = 15.8
 [qemu]
 args = [
   # The panel: the GPU starts at, and prefers, the panel's size, so the window never changes size and
-  # odap-shell finds the panel's mode without a kernel option; the firmware
+  # odap-composer finds the panel's mode without a kernel option; the firmware
   # does not drive this MMIO GPU (it needs at least 80 x 25 text cells), so boot shows no text.
   "-device", "virtio-gpu-device,xres={display.width_px},yres={display.height_px}",
   "-device", "virtio-multitouch-pci", "-device", "virtio-keyboard-pci",
-  # The simulator window's pointer, which odap-shell treats as one finger.
+  # The simulator window's pointer, which odap-composer treats as one finger.
   "-device", "virtio-tablet-pci",
 ]

@@ -11,7 +11,7 @@ The window of a virtual device was QEMU's own (cocoa on macOS). It can show only
 ## Decision
 
 - **Our own window.** `viewer/` holds `odap-vdev-view`, a host app in Rust and Slint (the ecosystem's UI stack, system ADR 0006). `odap-vdev start --window` starts QEMU without a window of its own (`-display none`) and opens it, inside the model's app bundle (name and icon). `odap-vdev window` opens it for a running device. QEMU's own window remains as a fallback (`ODAP_WINDOW=qemu`).
-- **The display over VNC.** QEMU's VNC server on the loopback provides the display, through `opendap-rfb`, a minimal RFB client (RFC 6143: raw 32-bit frames, desktop resizes, pointer events). The pointer over the display is the guest's absolute pointer, the shell's finger.
+- **The display over VNC.** QEMU's VNC server on the loopback provides the display, through `opendap-rfb`, a minimal RFB client (RFC 6143: raw 32-bit frames, desktop resizes, pointer events). The pointer over the display is the guest's absolute pointer, the composer's finger.
 - **The OpenDAP CLI's crates, not a copy of them** (amended 2026-10-23). What the window does to the device goes through the use cases `opendap` and OpenDAP Desktop share (`opendap-core` over `opendap-transport-vm`), consumed from the cli repository by revision:
   - the controls, pressed and released as the mouse button or the host key is, so long presses and combinations work as on the hardware, over a QMP session of the window's own (`LiveKeys`);
   - the rest on a worker thread: attaching by hand and the battery (`hardware`, through `odap-vdev`, which owns the hardware), the display (`screen`), restarts and power-off (`power`, the device's own `odap-reboot`).

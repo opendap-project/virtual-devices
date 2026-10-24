@@ -46,7 +46,7 @@
 - **Debug boot mode.**
   - It is the image's "debug" boot entry: a UKI profile with `blackbird.debug`, full messages, and a login on the screen and on the serial port.
   - Reach it with `odap-vdev reboot --mode debug` (or `opendap device reboot --mode debug`), which asks the device's `odap-reboot` to boot it once.
-- **Boot image.** On the T1 the boot image is U-Boot's logo, and the shell's first frame draws the same image before the interface (system shell spec §9). Not built yet: on the virtual board the screen is dark until the interface.
+- **Boot image.** On the T1 the boot image is U-Boot's logo, and the composer's first frame draws the same image before the interface (system composer spec §9). Not built yet: on the virtual board the screen is dark until the interface.
 
 ## 4. Window
 
@@ -103,7 +103,7 @@ Each part of the T1 reference board (board BOM v1.7) and what the `virtual-t1` m
 | microSD socket | `sdhci-pci` with an `sd-card`, empty at boot; `odap-vdev sd insert FILE` and `sd eject` | Same class (SD host, `mmcblk`), with insertion and removal |
 | 320 × 480 panel (ILI9488 on DSI) | virtio-gpu over MMIO, starting at and preferring 320 × 480 | Same pixels; DRM/KMS without hardware planes, and no 3D (Mesa renders in software). The firmware does not drive it, so boot shows no text and the window keeps its size |
 | Touch (faceplate HID) | virtio-multitouch; toolkit-verify `odap-inject` (uinput) for full contacts in tests | Same class. QEMU 11.1.2 passes no contacts from QMP to the multi-touch device |
-| — (simulator window) | virtio-tablet, used as one finger by `odap-shell`; `odap-vdev input tap / swipe` | Host mouse and VNC act as a finger |
+| — (simulator window) | virtio-tablet, used as one finger by `odap-composer`; `odap-vdev input tap / swipe` | Host mouse and VNC act as a finger |
 | Buttons: action, volume + and −, main | virtio-keyboard: `KEY_PLAYPAUSE`, `KEY_VOLUMEUP`, `KEY_VOLUMEDOWN`, `KEY_POWER`, plus the host keys Space, ↑, ↓ and P with the same roles (the faceplate layer) | Same roles; `odap-vdev input press ROLE [ROLE…]` (several roles: a combination, pressed and released together), or the keyboard in the window. Holding `main` 8 s cuts the power, as the board's PMIC (`[pmic]` in the board layer) |
 | CS43198 DACs, 3.5 mm and 4.4 mm outputs | virtio-sound to the host's audio output | One generic output; no DAC filters, gain stages, DSD or jack detection |
 | USB-C in host mode (USB DAC, drives) | `qemu-xhci`; `odap-vdev usb plug storage [FILE]` (without FILE, the simulator's own 1 GiB stick, sparse, in the instance's state), `usb plug audio`, `usb unplug` | Same classes (`usb-storage`, UAC through `snd-usb-audio`), plugged at run time |
