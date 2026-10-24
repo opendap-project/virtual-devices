@@ -5,22 +5,12 @@ import { Slider } from "std-widgets.slint";
 
 export struct Key {
     role: string,
-    // "left" or "right", its centre and length along the edge (px from the display's top), and
-    // how it looks: "disc" (Action), "half-top" and "half-bottom" (the volume capsule), "capsule".
-    edge: string,
-    centre: length,
-    span: length,
-    shape: string,
+    // Where the key is in the drawn front, in logical px, to press it there.
+    x: length,
+    y: length,
+    w: length,
+    h: length,
     pressed: bool,
-}
-
-// Front details, in logical px from the body's top-left (FPT-023, FPT-024); positions beyond
-// those rules are schematic.
-export struct Details {
-    als-x: length, als-y: length, als-d: length,
-    led-x: length, led-y: length, led-d: length,
-    mic-x: length, mic-y: length, mic-d: length,
-    mm: length,
 }
 
 export global Palette {
@@ -156,15 +146,17 @@ export component View inherits Window {
     in property <length> screen-h;
     // The frame, in logical px (panel pixels): the body, and where the display sits in it.
     in property <bool> framed: true;
-    in property <length> body-w;
-    in property <length> body-h;
-    in property <length> body-radius;
-    in property <length> display-x;
-    in property <length> display-y;
-    in property <length> display-radius;
-    in property <length> key-depth;
+    // The front of the device, drawn once from the case and faceplate layers (frame.rs), and
+    // where the display and the status LED's window are in it.
+    in property <image> front;
+    in property <length> front-w;
+    in property <length> front-h;
+    in property <length> screen-x;
+    in property <length> screen-y;
+    in property <length> led-x;
+    in property <length> led-y;
+    in property <length> led-d;
     in-out property <[Key]> keys;
-    in property <Details> details;
     // The status LED's colour, transparent while off (the virtual board's LED adapter drives it).
     in property <color> led: transparent;
     in-out property <bool> sidebar: true;
@@ -197,95 +189,26 @@ export component View inherits Window {
         padding: 16px;
         spacing: 16px;
 
-        // The device.
+        // The device: its drawn front, the live display in it, the keys to press, the LED.
         Rectangle {
-            width: (root.framed ? root.body-w + 2 * root.key-depth : root.screen-w);
-            height: (root.framed ? root.body-h : root.screen-h);
-
-            if root.framed: Rectangle {
-                x: root.key-depth;
+            width: root.framed ? root.front-w : root.screen-w;
+            height: root.framed ? root.front-h : root.screen-h;
+            if root.framed: Image {
+                x: 0;
                 y: 0;
-                width: root.body-w;
-                height: root.body-h;
-                border-radius: root.body-radius;
-                // Anodised graphite, lit from above; a fine highlight on the edge.
-                background: @linear-gradient(180deg, Palette.body.brighter(18%) 0%, Palette.body 45%, Palette.body.darker(25%) 100%);
-                border-width: 1px;
-                border-color: #ffffff14;
-                drop-shadow-blur: 22px;
-                drop-shadow-color: #000000a0;
-                drop-shadow-offset-y: 8px;
-                // The display's black glass around the active area, with a faint reflection.
-                Rectangle {
-                    x: root.display-x - 4px;
-                    y: root.display-y - 4px;
-                    width: root.screen-w + 8px;
-                    height: root.screen-h + 8px;
-                    border-radius: root.display-radius + 4px;
-                    background: Palette.bezel;
-                    border-width: 1px;
-                    border-color: #00000080;
-                }
-                // Above the display: the ambient light sensor, centred, and the status LED to its right.
-                Rectangle {
-                    x: root.details.als-x - root.details.als-d / 2;
-                    y: root.details.als-y - root.details.als-d / 2;
-                    width: root.details.als-d;
-                    height: root.details.als-d;
-                    border-radius: self.width / 2;
-                    background: #050607;
-                    border-width: 1px;
-                    border-color: #ffffff12;
-                }
-                Rectangle {
-                    x: root.details.led-x - root.details.led-d / 2;
-                    y: root.details.led-y - root.details.led-d / 2;
-                    width: root.details.led-d;
-                    height: root.details.led-d;
-                    border-radius: self.width / 2;
-                    background: root.led == transparent ? #101215 : root.led;
-                    border-width: 1px;
-                    border-color: #ffffff18;
-                    drop-shadow-blur: root.led == transparent ? 0 : 8px;
-                    drop-shadow-color: root.led;
-                }
-                // Below the display: the main microphone, centred.
-                Rectangle {
-                    x: root.details.mic-x - root.details.mic-d / 2;
-                    y: root.details.mic-y - root.details.mic-d / 2;
-                    width: root.details.mic-d;
-                    height: root.details.mic-d;
-                    border-radius: self.width / 2;
-                    background: #030304;
-                }
+                width: root.front-w;
+                height: root.front-h;
+                source: root.front;
             }
-
-            // The controls on the edges, as the concept art draws them; pressable.
             if root.framed: Rectangle {
-                for k[i] in root.keys: Rectangle {
-                    property <length> lift: k.pressed ? root.key-depth * 0.4 : 0;
-                    x: k.edge == "left" ? self.lift : root.key-depth + root.body-w - root.key-depth * 0.2 - self.lift;
-                    y: root.display-y + k.centre - k.span / 2;
-                    width: root.key-depth * 1.2;
-                    height: k.span;
-                    background: k.role == "action"
-                        ? @linear-gradient(90deg, Palette.action.brighter(12%), Palette.action.darker(18%))
-                        : @linear-gradient(90deg, Palette.key.brighter(22%), Palette.key.darker(28%));
-                    border-top-left-radius: k.shape == "half-bottom" ? 1px : self.width / 2;
-                    border-top-right-radius: k.shape == "half-bottom" ? 1px : self.width / 2;
-                    border-bottom-left-radius: k.shape == "half-top" ? 1px : self.width / 2;
-                    border-bottom-right-radius: k.shape == "half-top" ? 1px : self.width / 2;
-                    animate x { duration: 60ms; }
-                    // Main's ribs, for touch identification (T1-059).
-                    if k.role == "main": Rectangle {
-                        for r in floor(parent.height / 3px) - 2: Rectangle {
-                            y: 3px + r * 3px;
-                            height: 1px;
-                            background: #00000040;
-                        }
-                    }
-                    // Hovered by the mouse: a faint light on the key.
-                    if key-touch.has-hover && !k.pressed: Rectangle { background: #ffffff30; border-radius: parent.border-top-left-radius; }
+                for k in root.keys: Rectangle {
+                    x: k.x;
+                    y: k.y;
+                    width: k.w;
+                    height: k.h;
+                    border-radius: 3px;
+                    // Pressed: the key sinks into its pocket; hovered: a faint light on it.
+                    background: k.pressed ? #00000070 : (key-touch.has-hover ? #ffffff24 : transparent);
                     key-touch := TouchArea {
                         mouse-cursor: pointer;
                         pointer-event(e) => {
@@ -295,11 +218,20 @@ export component View inherits Window {
                     }
                 }
             }
-
+            if root.framed && root.led != transparent: Rectangle {
+                x: root.led-x - root.led-d / 2;
+                y: root.led-y - root.led-d / 2;
+                width: root.led-d;
+                height: root.led-d;
+                border-radius: self.width / 2;
+                background: root.led;
+                drop-shadow-blur: 10px;
+                drop-shadow-color: root.led;
+            }
             // The display: the guest's frame, 1:1 in panel pixels; the pointer is a finger.
             Image {
-                x: root.framed ? root.key-depth + root.display-x : 0;
-                y: root.framed ? root.display-y : 0;
+                x: root.framed ? root.screen-x : 0;
+                y: root.framed ? root.screen-y : 0;
                 width: root.screen-w;
                 height: root.screen-h;
                 source: root.screen;
@@ -314,30 +246,48 @@ export component View inherits Window {
             }
         }
 
-        // The sidebar: hardware actions, folded away by its handle. Everything fits without
-        // scrolling: the device's controls, power, storage and the system.
+        // The layout gives the sidebar its column; inside it, the panel is the whole column when
+        // open, and only its button when folded.
         Rectangle {
-            width: root.sidebar ? 236px : 22px;
-            background: root.sidebar ? Palette.panel : transparent;
-            border-radius: 10px;
-            handle := Rectangle {
-                x: 0;
-                y: 8px;
-                width: 22px;
-                height: 32px;
-                Text { text: root.sidebar ? "›" : "‹"; color: grip.has-hover ? Palette.text : Palette.muted; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
+          width: root.sidebar ? 236px : 36px;
+          Rectangle {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: root.sidebar ? parent.height : 36px;
+            background: Palette.panel;
+            border-radius: root.sidebar ? 10px : 8px;
+            fold := Rectangle {
+                x: parent.width - self.width - (root.sidebar ? 8px : 0);
+                y: root.sidebar ? 8px : 0;
+                width: 36px;
+                height: 36px;
+                border-radius: 8px;
+                background: grip.has-hover ? Palette.line : transparent;
+                accessible-role: button;
+                accessible-label: root.sidebar ? "Fold the sidebar" : "Open the sidebar";
+                accessible-action-default => { root.sidebar = !root.sidebar; }
+                Image {
+                    source: root.sidebar ? @image-url("icons/minimize.svg") : @image-url("icons/maximize.svg");
+                    colorize: grip.has-hover ? Palette.text : Palette.muted;
+                    width: 16px;
+                    height: 16px;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
                 grip := TouchArea { mouse-cursor: pointer; clicked => { root.sidebar = !root.sidebar; } }
             }
             if root.sidebar: VerticalLayout {
-                x: 22px;
-                width: parent.width - 22px;
+                x: 0;
+                width: parent.width;
                 padding: 12px;
-                padding-left: 2px;
                 spacing: 16px;
                 alignment: start;
 
                 VerticalLayout {
                     spacing: 2px;
+                    // Clear of the fold button at the top right.
+                    padding-right: 36px;
                     Text { text: root.name; color: Palette.text; font-size: 14px; font-weight: 600; }
                     Text { text: root.status == "" ? "Running" : root.status; color: Palette.muted; font-size: 11px; wrap: word-wrap; max-height: 30px; overflow: elide; }
                 }
@@ -395,6 +345,7 @@ export component View inherits Window {
                     }
                 }
             }
+        }
         }
     }
 }

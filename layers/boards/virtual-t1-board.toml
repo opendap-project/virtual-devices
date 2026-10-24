@@ -9,6 +9,13 @@ name = "Virtual T1 board"
 [board]
 storage_gb = 32
 
+# The card the simulation inserts into the microSD socket when none is given (odap-vdev sd insert):
+# a sparse raw image of this size in the instance's state, so it takes no space until written.
+# Any size up to 2 TB (SDXC's limit); 1 GiB when no layer sets it. Units: KiB, MiB, GiB, TiB, or
+# KB, MB, GB, TB.
+[microsd]
+card_size = "1GiB"
+
 # The PMIC's forced power-off: holding `main` this long cuts the power, in hardware, whatever the
 # OS does (T1 controls spec §1.3). The T1's time is a PMIC register set in bring-up (UNVERIFIED);
 # this is the virtual board's own, applied by odap-vdev (input press main --hold).

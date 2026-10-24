@@ -7,5 +7,6 @@ version = 1
 [layers]
 soc = "qemu-virt-aarch64"
 board = "virtual-t1-board"
+case = "t1-concept-case"
 faceplate = "virtual-touch"
 hats = []

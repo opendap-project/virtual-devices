@@ -44,6 +44,9 @@ class Instance:
     def pid_file(self): return self.state / "qemu.pid"
     @property
     def qmp_socket(self): return self.state / "qmp.sock"
+
+    @property
+    def window_qmp_socket(self): return self.state / "qmp-window.sock"
     @property
     def console_log(self): return self.state / "console.log"
     @property
@@ -163,6 +166,9 @@ class Instance:
                  "-fw_cfg", f"name=opt/org.opendap/device-description,file={description}",
                  *display, "-vnc", f"127.0.0.1:{self.vnc_display}",
                  "-qmp", f"unix:{self.qmp_socket},server=on,wait=off",
+                 # A monitor of its own for the simulator window, which keeps its connection open:
+                 # a QMP socket serves one client at a time, and the tools use the first.
+                 "-qmp", f"unix:{self.window_qmp_socket},server=on,wait=off",
                  "-serial", f"file:{self.console_log}"]
         # Not -daemonize: on macOS it forks after CoreAudio initializes and crashes.
         with open(self.qemu_log, "w") as log:
@@ -190,7 +196,7 @@ class Instance:
         frame.write_text(json.dumps(f))
         program = self._app_bundle(viewer) if platform.system() == "Darwin" else viewer
         argv = [program, "--frame", str(frame), "--vnc", f"127.0.0.1:{5900 + self.vnc_display}",
-                "--qmp", str(self.qmp_socket), "--vdev", str(TOOL), "--name", self.name]
+                "--qmp", str(self.window_qmp_socket), "--vdev", str(TOOL), "--name", self.name]
         argv += [] if framed else ["--no-frame"]
         argv += [] if on_top else ["--no-on-top"]
         with open(self.state / "window.log", "w") as log:

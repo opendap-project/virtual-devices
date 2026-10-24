@@ -77,7 +77,8 @@ def parser():
     s.add_argument("id")
 
     sd = sub.add_parser("sd", help="the microSD slot").add_subparsers(dest="action", required=True)
-    s = sd.add_parser("insert"); s.add_argument("file", help="raw image of the card")
+    s = sd.add_parser("insert", help="insert a card: FILE, or the hardware's default card ([microsd] card_size, 1 GiB)")
+    s.add_argument("file", nargs="?", help="raw image of the card (default: the hardware's own, in the instance's state)")
     sd.add_parser("eject")
 
     power = sub.add_parser("power", help="the simulated battery and charger").add_subparsers(dest="action", required=True)
@@ -248,8 +249,20 @@ def run(args):
     elif c == "sd":
         q = qmp(inst)
         if args.action == "insert":
-            q.cmd("blockdev-change-medium", id="sd0", filename=os.path.abspath(args.file), format="raw")
-            print(f"microSD inserted: {args.file}")
+            card = args.file
+            if not card:
+                # The hardware's card: sparse, so it takes space only as the device writes it.
+                size = compose.microsd_card(inst.model)
+                path = inst.state / "microsd.img"
+                if not path.exists():
+                    with open(path, "wb") as f:
+                        f.truncate(size)
+                elif path.stat().st_size != size:
+                    # The card holds what the device wrote: it is never recreated to resize it.
+                    print(f"note: {path} keeps its {path.stat().st_size} bytes; remove it for a {size}-byte card", file=sys.stderr)
+                card = str(path)
+            q.cmd("blockdev-change-medium", id="sd0", filename=os.path.abspath(card), format="raw")
+            print(f"microSD inserted: {card}")
         else:
             q.cmd("eject", id="sd0", force=True)
             print("microSD ejected")

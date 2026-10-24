@@ -12,7 +12,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 SCHEMA = "opendap.device-description/v1"
 # Control fields the runner uses and the description leaves out.
 RUNNER_ONLY = {"qcode"}
-KINDS = {"soc": "soc", "board": "boards", "faceplate": "faceplates", "hats": "hats"}
+KINDS = {"soc": "soc", "board": "boards", "case": "cases", "faceplate": "faceplates", "hats": "hats"}
+# Layers a model may leave out: a case only shapes the simulator window; HATs are optional.
+OPTIONAL = {"case", "hats"}
 
 
 class CompositionError(Exception):
@@ -41,10 +43,10 @@ def model_path(name):
 
 
 def layers(model):
-    """The model's layers, in order: soc, board, faceplate, then each HAT."""
+    """The model's layers, in order: soc, board, case, faceplate, then each HAT."""
     out = []
     for kind, folder in KINDS.items():
-        ids = model["layers"].get(kind, [] if kind == "hats" else None)
+        ids = model["layers"].get(kind, [] if kind in OPTIONAL else None)
         if ids is None:
             fail(f"model {model['model']['id']}: no {kind} layer")
         for lid in ids if isinstance(ids, list) else [ids]:
@@ -126,13 +128,39 @@ def forced_power_off_ms(model):
 
 
 def frame(model):
-    """How a window draws the device around its screen (runner-only), with the display and the
-    controls it needs; None when no layer describes a frame."""
-    f = next((layer["frame"] for layer in layers(model) if "frame" in layer), None)
+    """How the simulator window draws the device: the case (body and keys) and the faceplate's
+    front (glass, display placement, front details), with the display and the controls. None when
+    the model has no case or no front (the window shows the display alone)."""
+    case = next((layer["case"] for layer in layers(model) if "case" in layer), None)
+    front = next((layer["front"] for layer in layers(model) if "front" in layer), None)
     d = display(model)
-    if f is None or d is None:
+    if case is None or front is None or d is None:
         return None
-    return {"schema": "opendap.vdev-frame/v1", "frame": f, "display": d, "controls": controls(model)}
+    return {"schema": "opendap.vdev-frame/v2", "case": case, "front": front, "display": d, "controls": controls(model)}
+
+
+# SDXC's largest card, and the card the simulation uses when no layer sets one.
+SD_MAX = 2 * 10**12
+SD_DEFAULT = 1 << 30
+UNITS = {"KIB": 1 << 10, "MIB": 1 << 20, "GIB": 1 << 30, "TIB": 1 << 40, "KB": 10**3, "MB": 10**6, "GB": 10**9, "TB": 10**12, "B": 1}
+
+
+def size_bytes(text):
+    """`1GiB`, `512 MB`, `2TB` in bytes."""
+    m = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z]*)\s*", str(text))
+    if not m or m.group(2).upper() not in UNITS | {"": 1}:
+        fail(f"card_size {text!r}: a number and a unit (KiB, MiB, GiB, TiB, KB, MB, GB, TB)")
+    return int(float(m.group(1)) * UNITS.get(m.group(2).upper(), 1))
+
+
+def microsd_card(model):
+    """The size, in bytes, of the card the simulation inserts by default: the layers' `[microsd]
+    card_size`, up to 2 TB; 1 GiB when no layer sets it."""
+    size = next((size_bytes(layer["microsd"]["card_size"]) for layer in layers(model)
+                 if "card_size" in layer.get("microsd", {})), SD_DEFAULT)
+    if not 0 < size <= SD_MAX:
+        fail(f"microsd card_size: {size} bytes; a card is at most 2 TB")
+    return size
 
 
 def storage_gb(model):

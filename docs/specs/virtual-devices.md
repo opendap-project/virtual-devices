@@ -56,16 +56,24 @@ On macOS the window belongs to an app bundle named after the model ("Virtual T1"
 
 The window is the simulator window ([ADR 0001](../adr/0001-simulator-window.md)): the display, framed by the front of the device, and a sidebar that folds away.
 
-The frame is schematic until the case exports its geometry. It shows the body, the display glass, the four controls as the concept art shapes them, and the front details the touch faceplate places (FPT-023, FPT-024): the ambient light sensor centred above the display, the status LED to its right, and the microphone centred below it. The status LED lights in the colour the virtual board's LED adapter gives it.
+The front is composed from two layers, as the device is.
+
+- **The case layer** (`layers/cases/`, a model's `case`) is the body with its side keys. For the T1 it is the concept's 3D model:
+  - a 59.5 × 94.3 mm squircle (exponent 3.6) with a 0.6 mm bevel and a 1 mm lip around the inset faceplate;
+  - graphite polymer with a grip texture;
+  - Action an anodised orange disc, the volume halves and Main's crested pill in satin silver, each drawn as its silhouette from the front.
+- **The faceplate layer's `[front]`** is its surface in the case's opening (glass on the touch faceplate) and its parts by kind: the display (its size and shape from the faceplate's `[display]`), sensors, the status LED, microphones, and on other faceplates their own buttons and dials, which the window presses by role.
+
+The window draws the front once, at the display's density and twice that for a sharp picture, and lays the live display, the keys and the LED over it. Sizes beyond the requirements are the concept model's, set by eye (UNVERIFIED), until the case and the faceplate export their geometry.
 
 The sidebar fits without scrolling, with the design system's icons. It holds:
 
 - the controls, held while the mouse button is down, and Screenshot, which is the combination Main + Volume − (held 2 s, the power menu), so the gesture itself is tested;
 - the battery level and the charger, as a slider and a switch;
-- microSD, USB disk and USB DAC, as switches;
+- microSD (the hardware's own card: the board layer's `[microsd] card_size`, up to 2 TB, 1 GiB when unset, a sparse image in the instance's state), USB disk and USB DAC, as switches;
 - Save PNG (the display as the host sees it, to the Desktop, without the OS), reboot, debug boot and power off.
 
-The display takes the pointer as a finger, the drawn buttons press, and the host keys the faceplate names (Space, ↑, ↓, P) press their roles. `--no-frame` shows the display alone. `odap-vdev window` opens it for a running device, and `ODAP_VIEW_SNAPSHOT=FILE.png` saves the window as drawn, for checks without a person. QEMU's own window remains with `ODAP_WINDOW=qemu`.
+The window has a QMP monitor of its own, so the tools keep theirs while it is open. The display takes the pointer as a finger, the drawn buttons press, and the host keys the faceplate names (Space, ↑, ↓, P) press their roles. `--no-frame` shows the display alone. `odap-vdev window` opens it for a running device, and `ODAP_VIEW_SNAPSHOT=FILE.png` saves the window as drawn, for checks without a person. QEMU's own window remains with `ODAP_WINDOW=qemu`.
 
 The window stays above other windows by default, so it stays in view while you work in an editor or a terminal; `--no-on-top` turns that off. The simulator window sets its level when it is created. For QEMU's own window, whose cocoa display has no such option (QEMU 11.1), odap-vdev builds a small library with the system's clang (`host/macos/window-on-top.m`, kept in `~/.cache/opendap/vdev/`) and loads it into QEMU only. The host's pointer acts as a finger and its keys as the controls.
 

@@ -19,35 +19,45 @@ distance = "handheld"
 
 # The touch panel: QEMU's virtio-multitouch reports positions 0 to 32767 on each axis and tracks
 # 10 slots (QEMU 11.1 include/ui/input.h, INPUT_EVENT_ABS_MAX and INPUT_EVENT_SLOTS_MAX).
-# How the simulator window draws the device around the screen (odap-vdev frame; runner-only, never
-# in the device description). Schematic until the case and the faceplate export their geometry:
-# the body is T1-032's ideal outline (54 x 85.6 mm), the display is centred in it, the corner
-# radii are guesses (UNVERIFIED). Shapes and colours of the controls follow the concept art
-# (T1-059): Action an orange disc, Volume + and - two half-capsules, Main a ribbed silver capsule.
-[frame]
-body_width_mm = 54.0
-body_height_mm = 85.6
-body_radius_mm = 7.0
-display_x_mm = 2.52
-display_y_mm = 6.08
-display_radius_mm = 1.0
-body_color = "#1d2125"
-bezel_color = "#0b0c0e"
-action_color = "#ff6a2a"
-key_color = "#aab0b6"
-key_depth_mm = 1.6
-# Front details, seen from the front (FPT-023, FPT-024): above the display the ambient light
-# sensor centred and the status LED to its right, not in the corner; the main microphone centred
-# below the display. Offsets from the body's top-left corner; sizes are guesses (UNVERIFIED).
-als_x_mm = 27.0
-als_y_mm = 3.0
-als_d_mm = 1.6
-led_x_mm = 40.0
-led_y_mm = 3.0
-led_d_mm = 1.4
-mic_x_mm = 27.0
-mic_y_mm = 82.6
-mic_d_mm = 0.9
+# The front, as the simulator window draws it (odap-vdev frame; never in the device description):
+# the cover glass fills the case's opening, the display's active area is centred under it, and the
+# front details sit where FPT-023 and FPT-024 put them, at the concept model's positions and sizes
+# (set by eye, UNVERIFIED). Millimetres from the device centre, y up (T1-021).
+[front]
+# The faceplate's surface in the case's opening: here, cover glass over the whole front.
+surface = "glass"
+color = "#020203"
+
+# What the front carries, by kind: the display, sensors, the status LED, the microphone, and on
+# other faceplates their own controls (`button`, `dial`, with a role, as the description names it).
+[[front.parts]]
+kind = "display"
+x_mm = 0.0
+y_mm = 0.0
+
+[[front.parts]]
+kind = "sensor"
+name = "ambient light"
+x_mm = 0.0
+y_mm = 41.435
+d_mm = 1.6
+color = "#1a1214"
+
+[[front.parts]]
+kind = "led"
+name = "status"
+x_mm = 16.0
+y_mm = 41.435
+d_mm = 1.2
+color = "#3b3f44"
+
+[[front.parts]]
+kind = "mic"
+name = "main"
+x_mm = 0.0
+y_mm = -41.435
+d_mm = 0.8
+color = "#050505"
 
 [touch]
 resolution_x = 32768

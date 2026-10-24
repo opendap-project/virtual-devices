@@ -19,46 +19,16 @@ use std::{
 use serde::Deserialize;
 use slint::{ComponentHandle, Model, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel};
 
+mod frame;
+
 slint::include_modules!();
 
 #[derive(Deserialize)]
 struct FrameDoc {
-    frame: Frame,
+    case: Option<frame::Case>,
+    front: Option<frame::Front>,
     display: Display,
     controls: Vec<Control>,
-}
-
-#[derive(Deserialize)]
-struct Frame {
-    body_width_mm: f32,
-    body_height_mm: f32,
-    body_radius_mm: f32,
-    display_x_mm: f32,
-    display_y_mm: f32,
-    display_radius_mm: f32,
-    body_color: String,
-    bezel_color: String,
-    action_color: String,
-    key_color: String,
-    key_depth_mm: f32,
-    #[serde(default)]
-    als_x_mm: f32,
-    #[serde(default)]
-    als_y_mm: f32,
-    #[serde(default)]
-    als_d_mm: f32,
-    #[serde(default)]
-    led_x_mm: f32,
-    #[serde(default)]
-    led_y_mm: f32,
-    #[serde(default)]
-    led_d_mm: f32,
-    #[serde(default)]
-    mic_x_mm: f32,
-    #[serde(default)]
-    mic_y_mm: f32,
-    #[serde(default)]
-    mic_d_mm: f32,
 }
 
 #[derive(Deserialize)]
@@ -66,15 +36,14 @@ struct Display {
     width_px: u32,
     height_px: u32,
     width_mm: f32,
+    height_mm: f32,
+    #[serde(default)]
+    shape: String,
 }
 
 #[derive(Deserialize, Clone)]
 struct Control {
     role: String,
-    kind: String,
-    edge: String,
-    offset_mm: f32,
-    length_mm: f32,
     qcode: Option<String>,
 }
 
@@ -167,17 +136,12 @@ impl Qmp {
     }
 }
 
-fn color(hex: &str) -> slint::Color {
-    let v = u32::from_str_radix(hex.trim_start_matches('#'), 16).unwrap_or(0x808080);
-    slint::Color::from_rgb_u8((v >> 16) as u8, (v >> 8) as u8, v as u8)
-}
 
 fn main() -> Result<(), slint::PlatformError> {
     let a = args();
     let text = std::fs::read_to_string(&a.frame).unwrap_or_else(|e| usage(&format!("{}: {e}", a.frame.display())));
     let doc: FrameDoc = serde_json::from_str(&text).unwrap_or_else(|e| usage(&format!("frame: {e}")));
     let px_mm = doc.display.width_px as f32 / doc.display.width_mm;
-    let f = &doc.frame;
 
     // Kept on top from the start: the window is created with that level (winit's attributes).
     if a.on_top {
@@ -192,30 +156,28 @@ fn main() -> Result<(), slint::PlatformError> {
     ui.set_framed(a.framed);
     ui.set_screen_w(doc.display.width_px as f32);
     ui.set_screen_h(doc.display.height_px as f32);
-    ui.set_body_w(f.body_width_mm * px_mm);
-    ui.set_body_h(f.body_height_mm * px_mm);
-    ui.set_body_radius(f.body_radius_mm * px_mm);
-    ui.set_display_x(f.display_x_mm * px_mm);
-    ui.set_display_y(f.display_y_mm * px_mm);
-    ui.set_display_radius(f.display_radius_mm * px_mm);
-    ui.set_key_depth(f.key_depth_mm * px_mm);
-    ui.set_details(Details {
-        als_x: f.als_x_mm * px_mm,
-        als_y: f.als_y_mm * px_mm,
-        als_d: f.als_d_mm * px_mm,
-        led_x: f.led_x_mm * px_mm,
-        led_y: f.led_y_mm * px_mm,
-        led_d: f.led_d_mm * px_mm,
-        mic_x: f.mic_x_mm * px_mm,
-        mic_y: f.mic_y_mm * px_mm,
-        mic_d: f.mic_d_mm * px_mm,
-        mm: px_mm,
-    });
-    let palette = ui.global::<Palette>();
-    palette.set_body(color(&f.body_color));
-    palette.set_bezel(color(&f.bezel_color));
-    palette.set_action(color(&f.action_color));
-    palette.set_key(color(&f.key_color));
+    // The front, drawn at twice the logical density so it stays sharp on a Retina display.
+    let framed = a.framed && doc.case.is_some() && doc.front.is_some();
+    ui.set_framed(framed);
+    let mut key_rects: Vec<(String, frame::Rect)> = Vec::new();
+    if let (true, Some(case), Some(front)) = (framed, doc.case.as_ref(), doc.front.as_ref()) {
+        let panel = frame::Panel {
+            width_mm: doc.display.width_mm,
+            height_mm: doc.display.height_mm,
+            round: doc.display.shape == "round",
+        };
+        let drawn = frame::draw(case, front, &panel, px_mm, 2.0);
+        let buffer = SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(&drawn.rgba, drawn.width, drawn.height);
+        ui.set_front(slint::Image::from_rgba8_premultiplied(buffer));
+        ui.set_front_w(drawn.size.0);
+        ui.set_front_h(drawn.size.1);
+        ui.set_screen_x(drawn.screen.x);
+        ui.set_screen_y(drawn.screen.y);
+        ui.set_led_x(drawn.led.0);
+        ui.set_led_y(drawn.led.1);
+        ui.set_led_d(drawn.led.2);
+        key_rects = drawn.keys;
+    }
 
     // One key per role, with the shape the concept art gives it (T1-059).
     let mut keys: Vec<Key> = Vec::new();
@@ -227,20 +189,8 @@ fn main() -> Result<(), slint::PlatformError> {
             host_keys.push((q, c.role.clone()));
             continue;
         }
-        let shape = match (c.kind.as_str(), c.role.as_str()) {
-            (_, "action") => "disc",
-            ("rocker-half", "volume-up") => "half-top",
-            ("rocker-half", "volume-down") => "half-bottom",
-            _ => "capsule",
-        };
-        keys.push(Key {
-            role: c.role.clone().into(),
-            edge: c.edge.clone().into(),
-            centre: c.offset_mm * px_mm,
-            span: c.length_mm * px_mm,
-            shape: shape.into(),
-            pressed: false,
-        });
+        let r = key_rects.iter().find(|(role, _)| *role == c.role).map(|(_, r)| *r).unwrap_or_default();
+        keys.push(Key { role: c.role.clone().into(), x: r.x, y: r.y, w: r.w, h: r.h, pressed: false });
         qcode_of.push((c.role.clone(), q));
     }
     let keys_model = Rc::new(VecModel::from(keys));
@@ -322,7 +272,7 @@ fn main() -> Result<(), slint::PlatformError> {
             // Save PNG: the display as the host sees it, to the Desktop, with no part of the OS involved.
             let shot = shots.join(format!("{} {}.png", "Virtual T1", stamp())).display().to_string();
             let result = match what.as_str() {
-                "sd-insert" => run(&["sd", "insert", &blank]),
+                "sd-insert" => run(&["sd", "insert"]),
                 "sd-eject" => run(&["sd", "eject"]),
                 "usb-disk" => run(&["usb", "plug", "storage", &blank]),
                 "usb-disk-out" => run(&["usb", "unplug", "usbdisk"]),
