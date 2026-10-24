@@ -10,6 +10,10 @@
 //! The state is the virtual hardware's (a card in its socket), never what the device's system
 //! makes of it (a card mounted): the simulator simulates the physical side.
 
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::{
     path::PathBuf,
     sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel},
@@ -93,6 +97,10 @@ const STOP_WAIT: Duration = Duration::from_secs(60);
 /// (each look runs `odap-vdev`).
 const POLL_BUSY: Duration = Duration::from_millis(700);
 const POLL_IDLE: Duration = Duration::from_secs(4);
+/// While the board's events channel is up, the device is known to answer and the LED and the
+/// microphone arrive by themselves: what is left to look at (the hardware the window does not
+/// change itself) is looked at rarely.
+const POLL_LINKED: Duration = Duration::from_secs(30);
 /// How long a note stays.
 const NOTE_FOR: Duration = Duration::from_secs(6);
 
@@ -114,7 +122,7 @@ fn latest_only(queue: &mut Vec<Job>, of: impl Fn(&Job) -> bool) {
 
 /// Follows the faceplate's status LED and microphone as the device changes them: a blocking read
 /// of the board's events (odap-vdev-hw), so nothing polls; reopened when the device restarts.
-fn watch_board(vd_dir: PathBuf, jobs: Sender<Job>) {
+fn watch_board(vd_dir: PathBuf, jobs: Sender<Job>, linked: Arc<AtomicBool>) {
     use std::io::{BufRead, BufReader};
     let odap_vdev = vd_dir.join("bin/odap-vdev");
     loop {
@@ -135,6 +143,7 @@ fn watch_board(vd_dir: PathBuf, jobs: Sender<Job>) {
         if let Ok(mut child) = child {
             if let Some(out) = child.stdout.take() {
                 for line in BufReader::new(out).lines().map_while(Result::ok) {
+                    linked.store(true, Ordering::Relaxed);
                     let mut words = line.split_whitespace();
                     let job = match words.next() {
                         Some("led") => {
@@ -154,6 +163,7 @@ fn watch_board(vd_dir: PathBuf, jobs: Sender<Job>) {
             }
             let _ = child.wait();
         }
+        linked.store(false, Ordering::Relaxed);
         thread::sleep(Duration::from_secs(3));
     }
 }
@@ -164,13 +174,17 @@ impl Worker {
     pub fn start(vd_dir: PathBuf, publish: impl Fn(State) + Send + 'static) -> Self {
         let (tx, rx) = channel();
         let (dir, led_jobs) = (vd_dir.clone(), tx.clone());
-        thread::spawn(move || watch_board(dir, led_jobs));
-        thread::spawn(move || Run::new(vd_dir).run(rx, publish));
+        let linked = Arc::new(AtomicBool::new(false));
+        let watch_linked = linked.clone();
+        thread::spawn(move || watch_board(dir, led_jobs, watch_linked));
+        thread::spawn(move || Run::new(vd_dir, linked).run(rx, publish));
         Worker { jobs: tx }
     }
 }
 
 struct Run {
+    /// The board's events channel is up (watch_board): the device answers.
+    linked: Arc<AtomicBool>,
     vd_dir: PathBuf,
     vm: VirtualDevice,
     target: Transport,
@@ -182,8 +196,9 @@ struct Run {
 }
 
 impl Run {
-    fn new(vd_dir: PathBuf) -> Self {
+    fn new(vd_dir: PathBuf, linked: Arc<AtomicBool>) -> Self {
         Run {
+            linked,
             vm: VirtualDevice::at(vd_dir.clone()),
             vd_dir,
             target: Transport::Vm {
@@ -222,7 +237,13 @@ impl Run {
             self.state.note.clear();
             self.state.note_since = None;
         }
-        let st = self.vm.state();
+        // While the events channel is up the device answers: only the process is looked at (a
+        // local check), never the network probe, which costs the guest a connection each time.
+        let st = if self.state.phase == Phase::Ready && self.linked.load(Ordering::Relaxed) {
+            if self.vm.pid().is_some() { VmState::Running } else { VmState::Stopped }
+        } else {
+            self.vm.state()
+        };
         let (running, answering) = (st != VmState::Stopped, st == VmState::Running);
         let was_ready = self.state.phase == Phase::Ready;
         self.state.phase.observe(running, answering);
@@ -272,7 +293,13 @@ impl Run {
         self.refresh();
         publish(self.state.clone());
         loop {
-            let wait = if self.busy() { POLL_BUSY } else { POLL_IDLE };
+            let wait = if self.busy() {
+                POLL_BUSY
+            } else if self.linked.load(Ordering::Relaxed) {
+                POLL_LINKED
+            } else {
+                POLL_IDLE
+            };
             match rx.recv_timeout(wait) {
                 Ok(job) => {
                     // Whatever else is queued was asked with the state the window had then; the

@@ -107,7 +107,12 @@ class Instance:
 
     # Management link
     def ssh_argv(self, command=()):
-        return ["ssh", "-i", str(workspace.dev_key()), "-p", str(self.ssh_port), *SSH_OPTS, "root@127.0.0.1", "--", *command]
+        # One connection shared by every call (OpenSSH's multiplexing): a call opens a session on
+        # it, with no new key exchange or login, and the connection stays a minute after the last.
+        # The socket's path is kept short (Unix sockets allow about 104 bytes on macOS, and ssh adds
+        # a suffix); %C is a hash of this user, host and port, so instances never share one.
+        mux = ["-o", "ControlMaster=auto", "-o", "ControlPath=/tmp/odap-ssh-%C", "-o", "ControlPersist=60"]
+        return ["ssh", "-i", str(workspace.dev_key()), "-p", str(self.ssh_port), *SSH_OPTS, *mux, "root@127.0.0.1", "--", *command]
 
     def ssh(self, *command, check=True, capture=True):
         """Run on the device. ssh joins its arguments into one line for the remote shell, so pass
