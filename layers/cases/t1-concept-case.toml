@@ -28,12 +28,15 @@ texture = "grip"
 # there): where they are along the edge (centre, from the device centre), the length and the width
 # (across the case's thickness, centred on its mid-plane) of their face, the bevel around the face,
 # how far the face stands out of the wall, their shape and finish, and marks in relief.
+# The keys sit 4.964 mm lower than in the concept model (maintainers, 2026-10-23): Action's top edge
+# meets the bottom line of the shell's status bar (28 design px, 4.284 mm on this display), and the
+# others keep their places relative to it.
 # travel_mm is how far a key goes into the case when pressed, sideways: set by eye (UNVERIFIED);
 # T1-022 states only that Action travels deeper than the others, which travel short.
 [[case.keys]]
 role = "action"
 side = "left"
-y_mm = 30.9
+y_mm = 25.936
 length_mm = 13.0
 width_mm = 13.0
 protrusion_mm = 2.06
@@ -44,7 +47,7 @@ finish = "anodised-orange"
 [[case.keys]]
 role = "volume-up"
 side = "left"
-y_mm = 14.7125
+y_mm = 9.7485
 length_mm = 11.375
 width_mm = 8.6
 bevel_mm = 0.45
@@ -60,12 +63,12 @@ finish = "satin-silver"
 # + in graphite relief on the face (bars 3.6 x 0.85 mm), centred here; on the face, so not drawn
 # from the front.
 mark = "+"
-mark_y_mm = 15.6
+mark_y_mm = 10.636
 
 [[case.keys]]
 role = "volume-down"
 side = "left"
-y_mm = 2.0875
+y_mm = -2.8765
 length_mm = 11.375
 width_mm = 8.6
 bevel_mm = 0.45
@@ -76,12 +79,12 @@ shape = "half-down"
 cap_radius_mm = 4.3
 finish = "satin-silver"
 mark = "-"
-mark_y_mm = 1.2
+mark_y_mm = -3.764
 
 [[case.keys]]
 role = "main"
 side = "right"
-y_mm = 22.9
+y_mm = 17.936
 length_mm = 15.0
 width_mm = 7.0
 bevel_mm = 0.4

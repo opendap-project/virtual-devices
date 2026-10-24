@@ -94,8 +94,9 @@ component Pill inherits Rectangle {
 
 // A switch with its label: a state of the hardware (a card in, a charger on). The hardware owns
 // it: `state` is 0 off, 1 attaching, 2 on, 3 detaching. A click asks for the other side; while
-// the change is in flight the knob already stands where it goes, the track pulses and the switch
-// takes no click, until the hardware has it.
+// the change is in flight the knob already stands where it goes, the track and the icon pulse and
+// the switch takes no click, until the hardware has it. A switch that cannot take a change now is
+// dimmed. The state is shown, never written beside it; the words are for screen readers.
 component Toggle inherits Rectangle {
     in property <string> label;
     in property <image> icon;
@@ -110,7 +111,9 @@ component Toggle inherits Rectangle {
     property <bool> busy: root.state == 1 || root.state == 3;
     property <bool> live: root.enabled && !root.busy;
     property <string> detail: root.busy ? (root.state == 1 ? root.attaching : root.detaching) : (root.enabled ? "" : root.why);
-    height: root.detail == "" ? 28px : 36px;
+    property <bool> beat: mod(animation-tick(), 1200ms) < 600ms;
+    height: 28px;
+    opacity: root.enabled ? 1 : 0.45;
     accessible-role: switch;
     accessible-label: root.label;
     accessible-checked: root.on;
@@ -119,26 +122,27 @@ component Toggle inherits Rectangle {
     accessible-action-default => { if root.live { root.toggled(!root.on); } }
     HorizontalLayout {
         spacing: 8px;
-        Image { source: root.icon; colorize: root.on && root.enabled ? Palette.text : Palette.muted; width: 16px; height: 16px; y: (parent.height - self.height) / 2; }
-        VerticalLayout {
-            alignment: center;
-            horizontal-stretch: 1;
-            Text { text: root.label; color: root.enabled ? Palette.text : Palette.muted; font-size: 12px; overflow: elide; }
-            if root.detail != "": Text { text: root.detail; color: Palette.muted; font-size: 10px; overflow: elide; }
+        Image {
+            source: root.icon;
+            colorize: root.busy ? (root.beat ? #3b82c4 : Palette.muted) : (root.on ? Palette.text : Palette.muted);
+            animate colorize { duration: 600ms; easing: ease-in-out; }
+            width: 16px;
+            height: 16px;
+            y: (parent.height - self.height) / 2;
         }
+        Text { text: root.label; color: Palette.text; font-size: 12px; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
         Rectangle {
             width: 34px;
             height: 18px;
             y: (parent.height - self.height) / 2;
             border-radius: 9px;
-            opacity: root.enabled ? 1 : 0.45;
             background: root.on ? #3b82c4 : Palette.line;
             animate background { duration: 120ms; }
             // In flight: a slow pulse over the track, so it reads as waiting, not as broken.
             Rectangle {
                 border-radius: parent.border-radius;
                 background: Palette.text;
-                opacity: root.busy ? (mod(animation-tick(), 1200ms) < 600ms ? 0.18 : 0.04) : 0;
+                opacity: root.busy ? (root.beat ? 0.22 : 0.04) : 0;
                 animate opacity { duration: 600ms; easing: ease-in-out; }
             }
             Rectangle {
@@ -163,7 +167,8 @@ component Toggle inherits Rectangle {
 
 // A system action: an icon button, its label below it, outside the button, so a longer label
 // never crowds the icon.
-// `busy`: its action is in flight (the label says so, `busy-label`); `enabled`: it can take one.
+// `busy`: its action is in flight, shown by its icon (turning, with `spin`, or pulsing) on a
+// pulsing ground, its label unchanged (`busy-label` is for screen readers); `enabled`: it can take one.
 component Tool inherits VerticalLayout {
     in property <image> icon;
     in property <string> label;
@@ -171,6 +176,7 @@ component Tool inherits VerticalLayout {
     in property <bool> enabled: true;
     in property <bool> busy;
     in property <string> busy-label;
+    in property <bool> spin;
     callback clicked();
     property <bool> live: root.enabled && !root.busy;
     spacing: 4px;
@@ -187,6 +193,11 @@ component Tool inherits VerticalLayout {
         accessible-action-default => { if root.live { root.clicked(); } }
         Image {
             source: root.icon;
+            rotation-angle: root.busy && root.spin ? -360deg * mod(animation-tick(), 1000ms) / 1000ms : 0deg;
+            rotation-origin-x: self.width / 2;
+            rotation-origin-y: self.height / 2;
+            opacity: root.busy && !root.spin ? (mod(animation-tick(), 1200ms) < 600ms ? 1 : 0.35) : 1;
+            animate opacity { duration: 600ms; easing: ease-in-out; }
             colorize: root.danger ? #e5484d : Palette.text;
             width: 18px;
             height: 18px;
@@ -196,7 +207,7 @@ component Tool inherits VerticalLayout {
         touch := TouchArea { enabled: root.live; mouse-cursor: root.live ? pointer : default; clicked => { root.clicked(); } }
     }
     Text {
-        text: root.busy ? root.busy-label : root.label;
+        text: root.label;
         color: root.danger && root.live ? #e5484d : Palette.muted;
         font-size: 10px;
         horizontal-alignment: center;
@@ -554,7 +565,7 @@ export component View inherits Window {
                         // Restarts and power-off take a ready device, once: the one in flight
                         // shows it, the others wait for it.
                         Tool { icon: @image-url("icons/screenshot.svg"); label: "Save PNG"; busy: root.saving; busy-label: "Saving…"; width: (parent.width - 18px) / 4; clicked => { root.action("screenshot"); } }
-                        Tool { icon: @image-url("icons/restart.svg"); label: "Reboot"; enabled: root.phase == 2; busy: root.phase == 3 && !root.debug-reboot; busy-label: "Restarting…"; width: (parent.width - 18px) / 4; clicked => { root.action("reboot"); } }
+                        Tool { icon: @image-url("icons/restart.svg"); label: "Reboot"; enabled: root.phase == 2; busy: root.phase == 3 && !root.debug-reboot; busy-label: "Restarting…"; spin: true; width: (parent.width - 18px) / 4; clicked => { root.action("reboot"); } }
                         Tool { icon: @image-url("icons/developer.svg"); label: "Debug"; enabled: root.phase == 2; busy: root.phase == 3 && root.debug-reboot; busy-label: "Restarting…"; width: (parent.width - 18px) / 4; clicked => { root.action("reboot-debug"); } }
                         Tool { icon: @image-url("icons/power.svg"); label: "Power off"; enabled: root.phase == 2; busy: root.phase == 4; busy-label: "Powering off…"; width: (parent.width - 18px) / 4; danger: true; clicked => { root.action("poweroff"); } }
                     }
