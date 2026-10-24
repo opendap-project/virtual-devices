@@ -8,6 +8,7 @@ import json
 import os
 import pathlib
 import platform
+import re
 import shutil
 import signal
 import subprocess
@@ -15,6 +16,7 @@ import sys
 import time
 
 from . import compose, workspace
+from .qmp import Qmp
 
 SSH_OPTS = ["-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR"]
 
@@ -196,7 +198,7 @@ class Instance:
         frame.write_text(json.dumps(f))
         program = self._app_bundle(viewer) if platform.system() == "Darwin" else viewer
         argv = [program, "--frame", str(frame), "--vnc", f"127.0.0.1:{5900 + self.vnc_display}",
-                "--qmp", str(self.window_qmp_socket), "--vdev", str(TOOL), "--name", self.name]
+                "--qmp", str(self.window_qmp_socket), "--checkout", str(ROOT), "--name", self.name]
         argv += [] if framed else ["--no-frame"]
         argv += [] if on_top else ["--no-on-top"]
         with open(self.state / "window.log", "w") as log:
@@ -222,6 +224,23 @@ class Instance:
             raise ValueError((r.stderr or "").strip().removeprefix("odap-reboot: ") or f"no mode {mode}")
         if r.returncode not in (0, 255):  # 255: the connection closed as the device went down
             raise InstanceError((r.stderr or "").strip() or "the reboot failed")
+
+    def hardware(self):
+        """The virtual hardware's physical state (`opendap.vdev-hardware/v1`), not what the
+        device's system makes of it: the card in the socket and the USB devices on the port
+        (QEMU), the charger and the battery (the board's battery model, test_power)."""
+        if not self.pid():
+            raise InstanceError(f"{self.name} is not running (odap-vdev start)")
+        q = Qmp(self.qmp_socket)
+        sd = any(b.get("qdev") == "sd0" and "inserted" in b for b in q.cmd("query-block"))
+        usb = re.findall(r"ID: (\S+)", q.cmd("human-monitor-command", **{"command-line": "info usb"}) or "")
+        charger, battery = False, None
+        r = self.ssh("cat /sys/module/test_power/parameters/usb_online /sys/module/test_power/parameters/battery_capacity", check=False)
+        if r.returncode == 0:
+            lines = r.stdout.split()
+            charger = bool(lines) and lines[0].strip() in ("on", "1")
+            battery = int(lines[1]) if len(lines) > 1 and lines[1].isdigit() else None
+        return {"schema": "opendap.vdev-hardware/v1", "sd": sd, "usb": usb, "charger": charger, "battery": battery}
 
     def boot_modes(self):
         return self.ssh("odap-reboot", "--list").stdout.split()

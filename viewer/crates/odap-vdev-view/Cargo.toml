@@ -9,6 +9,10 @@ publish = false
 
 [dependencies]
 opendap-rfb.workspace = true
+opendap-model.workspace = true
+opendap-core.workspace = true
+opendap-transport-ssh.workspace = true
+opendap-transport-vm.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # ODAP_VIEW_SNAPSHOT: the window saved as PNG.

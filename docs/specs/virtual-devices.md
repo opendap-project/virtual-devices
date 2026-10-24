@@ -22,7 +22,7 @@
 | `layers/faceplates/` | H3: `virtual-touch`, with the panel, touch, the controls with roles and places, and the host's keys and pointer |
 | `layers/hats/` | H4: none yet |
 | `models/` | `virtual-t1`: its identity, and one layer per kind |
-| `bin/odap-vdev` | The tool, one domain per subcommand: `models`, `describe`, `start [--window] [--no-frame] [--no-on-top] [--wait]`, `window`, `frame`, `stop`, `reboot [--mode MODE] [--list]`, `status [--json]`, `ssh`, `console`, `screen capture`, `input press ROLE [ROLE…] / tap / swipe`, `usb list / plug / unplug`, `sd insert / eject`, `power battery / charger` |
+| `bin/odap-vdev` | The tool, one domain per subcommand: `models`, `describe`, `start [--window] [--no-frame] [--no-on-top] [--wait]`, `window`, `frame`, `stop`, `reboot [--mode MODE] [--list]`, `status [--json]`, `ssh`, `console`, `screen capture`, `input press ROLE [ROLE…] / key ROLE down / key ROLE up / tap / swipe`, `usb list / plug / unplug`, `sd insert / eject`, `power battery / charger`, `hw [--json]` (the hardware's state: card, USB, charger, battery, `opendap.vdev-hardware/v1`) |
 | `lib/odap_vdev/` | Its modules: `compose` (model and layers to description and QEMU arguments), `instance` (one running device), `qmp`, `workspace` (other repositories through `repos.tsv`), `cli` |
 | `export/bsp/` | The virtual board's support package for Blackbird OS images (a mkosi config directory): the description from fw_cfg, the network links, the USB device port, the initrd's drivers |
 
@@ -73,6 +73,19 @@ The sidebar fits without scrolling, with the design system's icons. It holds:
 - microSD (the hardware's own card: the board layer's `[microsd] card_size`, up to 2 TB, 1 GiB when unset, a sparse image in the instance's state), USB disk and USB DAC, as switches;
 - Save PNG (the display as the host sees it, to the Desktop, without the OS), reboot, debug boot and power off.
 
+Every control shows the hardware's state, never the system's: a card is in from the moment it is in its socket, mounted or not. A change in flight locks its control until the hardware has it (the switch reads "Inserting…", "Unplugging…"); a reboot locks the power actions until the device has gone down and answers again. The battery and the charger are the board's battery model on the device, so they take changes once it runs and say so until then. The line under the name is the device's state; notes (a saved file, an error) show at the bottom for a few seconds.
+
+The keyboard drives the whole window, with the mouse or without it, and with the sidebar folded:
+
+| Keys | Does |
+|---|---|
+| Space, P, ← or ↑, → or ↓ | Action, Main, Volume +, Volume −, held as long as the key |
+| S | Screenshot (Main + Volume −), held |
+| ⌘S, ⌘R, ⌘⇧R, ⌘⇧P | Save PNG, reboot, reboot into debug, power off |
+| ⌘1 … ⌘4 | microSD, USB disk, USB DAC, charger, in or out |
+| ⌘− / ⌘= | Battery −5 % / +5 % |
+| ⌘\, ⌘K | Fold the sidebar; the bindings (closed by its X, a click outside or Esc) |
+
 The window has a QMP monitor of its own, so the tools keep theirs while it is open. The display takes the pointer as a finger, the drawn buttons press, and the host keys the faceplate names (Space, ↑, ↓, P) press their roles. `--no-frame` shows the display alone. `odap-vdev window` opens it for a running device, and `ODAP_VIEW_SNAPSHOT=FILE.png` saves the window as drawn, for checks without a person. QEMU's own window remains with `ODAP_WINDOW=qemu`.
 
 The window stays above other windows by default, so it stays in view while you work in an editor or a terminal; `--no-on-top` turns that off. The simulator window sets its level when it is created. For QEMU's own window, whose cocoa display has no such option (QEMU 11.1), odap-vdev builds a small library with the system's clang (`host/macos/window-on-top.m`, kept in `~/.cache/opendap/vdev/`) and loads it into QEMU only. The host's pointer acts as a finger and its keys as the controls.
@@ -92,7 +105,7 @@ Each part of the T1 reference board (board BOM v1.7) and what the `virtual-t1` m
 | — (simulator window) | virtio-tablet, used as one finger by `odap-shell`; `odap-vdev input tap / swipe` | Host mouse and VNC act as a finger |
 | Buttons: action, volume + and −, main | virtio-keyboard: `KEY_PLAYPAUSE`, `KEY_VOLUMEUP`, `KEY_VOLUMEDOWN`, `KEY_POWER`, plus the host keys Space, ↑, ↓ and P with the same roles (the faceplate layer) | Same roles; `odap-vdev input press ROLE [ROLE…]` (several roles: a combination, pressed and released together), or the keyboard in the window. Holding `main` 8 s cuts the power, as the board's PMIC (`[pmic]` in the board layer) |
 | CS43198 DACs, 3.5 mm and 4.4 mm outputs | virtio-sound to the host's audio output | One generic output; no DAC filters, gain stages, DSD or jack detection |
-| USB-C in host mode (USB DAC, drives) | `qemu-xhci`; `odap-vdev usb plug storage FILE`, `usb plug audio`, `usb unplug` | Same classes (`usb-storage`, UAC through `snd-usb-audio`), plugged at run time |
+| USB-C in host mode (USB DAC, drives) | `qemu-xhci`; `odap-vdev usb plug storage [FILE]` (without FILE, the simulator's own 1 GiB stick, sparse, in the instance's state), `usb plug audio`, `usb unplug` | Same classes (`usb-storage`, UAC through `snd-usb-audio`), plugged at run time |
 | USB-C in device mode (ADR 0013: NCM, ACM, mass storage, UAC2) | `dummy_hcd` and the configfs gadget, with this instance as the computer; `virtual-usb-device plug / unplug` | NCM, ACM and mass storage enumerate (checked 2026-10-23). UAC2 cannot bind, because `dummy_hcd` has no isochronous transfers, so it is tested on the T1. The host computer itself does not see the gadget |
 | Wi-Fi | A second NIC on the host's network through socket_vmnet: bridged to the host's interface (the LAN), or vmnet's shared network | IP on the local network and the internet, mDNS; no radio, scanning or roaming |
 | — (cable to a computer) | QEMU's user-mode network, SSH on `127.0.0.1:2222` | The management link the CLI uses (`--target vm`) |

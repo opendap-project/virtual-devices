@@ -1,24 +1,29 @@
 //! `odap-vdev-view`: the simulator window of a virtual device (virtual-devices ADR 0001).
 //!
 //! It shows the guest's display over QEMU's VNC server on the loopback (RFB), framed by the
-//! device as `odap-vdev frame` describes it, and sends the device's controls over QMP with real
-//! presses and releases, so long presses and combinations work as on the hardware. The sidebar's
-//! other actions (battery, charger, storage, boot) run `odap-vdev`, which owns them.
+//! device as `odap-vdev frame` describes it, and sends the device's controls with real presses
+//! and releases, so long presses and combinations work as on the hardware. Everything it does to
+//! the device goes through the OpenDAP CLI's crates, the use cases `opendap` and OpenDAP Desktop
+//! share: the controls over a held QMP session (opendap-transport-vm `LiveKeys`), the rest on a
+//! worker thread (src/device.rs).
 //!
 //! Started by `odap-vdev start --window`; it ends when the device stops.
 
 use std::{
-    io::{BufRead, BufReader, Write},
-    rc::Rc,
-    os::unix::net::UnixStream,
     path::PathBuf,
-    process::Command,
-    sync::{Arc, Mutex},
+    rc::Rc,
+    sync::{Arc, Mutex, mpsc},
 };
+
+use opendap_core::InputSink;
+use opendap_core::power::Phase;
+use opendap_model::{Attachment, BootMode, InputEvent, PowerAction, Role};
+use opendap_transport_vm::live::LiveKeys;
 
 use serde::Deserialize;
 use slint::{ComponentHandle, Model, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel};
 
+mod device;
 mod frame;
 
 slint::include_modules!();
@@ -51,7 +56,7 @@ struct Args {
     frame: PathBuf,
     vnc: String,
     qmp: PathBuf,
-    vdev: PathBuf,
+    checkout: PathBuf,
     name: String,
     framed: bool,
     on_top: bool,
@@ -62,7 +67,7 @@ fn args() -> Args {
         frame: PathBuf::new(),
         vnc: "127.0.0.1:5900".into(),
         qmp: PathBuf::new(),
-        vdev: PathBuf::from("odap-vdev"),
+        checkout: PathBuf::new(),
         name: "Virtual device".into(),
         framed: true,
         on_top: true,
@@ -74,7 +79,7 @@ fn args() -> Args {
             "--frame" => a.frame = value().into(),
             "--vnc" => a.vnc = value(),
             "--qmp" => a.qmp = value().into(),
-            "--vdev" => a.vdev = value().into(),
+            "--checkout" => a.checkout = value().into(),
             "--name" => a.name = value(),
             "--no-frame" => a.framed = false,
             "--no-on-top" => a.on_top = false,
@@ -90,52 +95,10 @@ fn usage(msg: &str) -> ! {
         eprintln!("odap-vdev-view: {msg}");
     }
     eprintln!(
-        "usage: odap-vdev-view --frame FRAME.json --qmp SOCKET [--vnc HOST:PORT] [--vdev PATH] [--name NAME] [--no-frame] [--no-on-top]"
+        "usage: odap-vdev-view --frame FRAME.json --qmp SOCKET --checkout VIRTUAL_DEVICES_DIR [--vnc HOST:PORT] [--name NAME] [--no-frame] [--no-on-top]"
     );
     std::process::exit(if msg.is_empty() { 0 } else { 2 });
 }
-
-/// QMP, for the controls: key down and up as separate events.
-struct Qmp(Mutex<Option<(UnixStream, BufReader<UnixStream>)>>);
-
-impl Qmp {
-    fn connect(path: &PathBuf) -> Self {
-        let conn = (|| {
-            let s = UnixStream::connect(path)?;
-            let mut r = BufReader::new(s.try_clone()?);
-            let mut line = String::new();
-            r.read_line(&mut line)?; // the greeting
-            let mut w = s.try_clone()?;
-            writeln!(w, r#"{{"execute":"qmp_capabilities"}}"#)?;
-            line.clear();
-            r.read_line(&mut line)?;
-            Ok::<_, std::io::Error>((w, r))
-        })();
-        if let Err(err) = &conn {
-            eprintln!("odap-vdev-view: QMP: {err}");
-        }
-        Qmp(Mutex::new(conn.ok()))
-    }
-
-    fn key(&self, qcode: &str, down: bool) {
-        let mut guard = self.0.lock().unwrap();
-        let Some((w, r)) = guard.as_mut() else { return };
-        let cmd = format!(
-            r#"{{"execute":"input-send-event","arguments":{{"events":[{{"type":"key","data":{{"down":{down},"key":{{"type":"qcode","data":"{qcode}"}}}}}}]}}}}"#
-        );
-        let mut line = String::new();
-        // Replies and events come as lines; read up to the reply to this command.
-        if writeln!(w, "{cmd}").is_ok() {
-            while r.read_line(&mut line).is_ok_and(|n| n > 0) {
-                if line.contains("\"return\"") || line.contains("\"error\"") {
-                    break;
-                }
-                line.clear();
-            }
-        }
-    }
-}
-
 
 fn main() -> Result<(), slint::PlatformError> {
     let a = args();
@@ -196,15 +159,31 @@ fn main() -> Result<(), slint::PlatformError> {
     let keys_model = Rc::new(VecModel::from(keys));
     ui.set_keys(ModelRc::from(keys_model.clone()));
 
-    let qmp = Arc::new(Qmp::connect(&a.qmp));
-    let press = {
-        let qmp = qmp.clone();
-        let keys_model = keys_model.clone();
-        let qcode_of = qcode_of.clone();
-        move |role: &str, down: bool| {
-            if let Some((_, q)) = qcode_of.iter().find(|(r, _)| r == role) {
-                qmp.key(q, down);
+    // The controls, in order, on a thread of their own: the window never waits for QMP.
+    let (key_tx, key_rx) = mpsc::channel::<InputEvent>();
+    {
+        let live = LiveKeys::new(&a.qmp, qcode_of.iter().map(|(r, q)| (Role::from(r.as_str()), q.clone())).collect());
+        std::thread::spawn(move || {
+            for event in key_rx {
+                if let Err(e) = live.send(&event) {
+                    eprintln!("odap-vdev-view: {}", e.message);
+                }
             }
+        });
+    }
+    let press = {
+        let keys_model = keys_model.clone();
+        move |role: &str, down: bool| {
+            // Already so (a key the OS repeats, the mouse and a key on the same control): nothing.
+            let same = (0..keys_model.row_count())
+                .filter_map(|i| keys_model.row_data(i))
+                .any(|k| k.role == role && k.pressed == down);
+            if same {
+                return;
+            }
+            let role = Role::from(role);
+            let _ = key_tx.send(if down { InputEvent::KeyDown { role: role.clone() } } else { InputEvent::KeyUp { role: role.clone() } });
+            let role = role.as_str();
             for i in 0..keys_model.row_count() {
                 let mut k = keys_model.row_data(i).unwrap();
                 if k.role == role {
@@ -230,6 +209,12 @@ fn main() -> Result<(), slint::PlatformError> {
         // The host keys the faceplate gives (Space, ↑, ↓, P): their role, by their qcode.
         let press = press.clone();
         ui.on_host_key(move |text, down| {
+            // ← and → are the window's own: Volume + and −, as ↑ and ↓ are.
+            match text.as_str() {
+                "\u{F702}" => return press("volume-up", down),
+                "\u{F703}" => return press("volume-down", down),
+                _ => {}
+            }
             let qcode = match text.as_str() {
                 " " => "spc",
                 "\u{F700}" => "up",
@@ -242,71 +227,70 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // The sidebar's other actions belong to odap-vdev.
-    let vdev = a.vdev.clone();
-    let run = move |args: &[&str]| {
-        let out = Command::new(&vdev).args(args).output();
-        match out {
-            Ok(o) => String::from_utf8_lossy(if o.status.success() { &o.stdout } else { &o.stderr }).trim().to_string(),
-            Err(e) => e.to_string(),
-        }
+    // The sidebar's other actions, on the worker; the window shows the state it publishes.
+    let worker = {
+        let weak = ui.as_weak();
+        device::Worker::start(a.checkout.clone(), move |st| {
+            let weak = weak.clone();
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(ui) = weak.upgrade() {
+                    show(&ui, &st);
+                }
+            });
+        })
     };
-    let run = Rc::new(run);
+    let jobs = worker.jobs.clone();
     {
-        let run = run.clone();
+        let jobs = jobs.clone();
+        let device_name = a.name.clone();
         let weak = ui.as_weak();
-        let state = a.frame.parent().map(PathBuf::from).unwrap_or_default();
         ui.on_action(move |what| {
-            let shots = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join("Desktop");
-            // A blank card or disk, in the instance's own state directory (beside frame.json),
-            // never in a shared temporary directory; created only if it is not there.
-            let blank = state.join("blank.img");
-            if !blank.exists() {
-                let _ = std::fs::OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .open(&blank)
-                    .and_then(|f| f.set_len(64 << 20));
-            }
-            let blank = blank.display().to_string();
-            // Save PNG: the display as the host sees it, to the Desktop, with no part of the OS involved.
-            let shot = shots.join(format!("{} {}.png", "Virtual T1", stamp())).display().to_string();
-            let result = match what.as_str() {
-                "sd-insert" => run(&["sd", "insert"]),
-                "sd-eject" => run(&["sd", "eject"]),
-                "usb-disk" => run(&["usb", "plug", "storage", &blank]),
-                "usb-disk-out" => run(&["usb", "unplug", "usbdisk"]),
-                "usb-audio" => run(&["usb", "plug", "audio"]),
-                "usb-audio-out" => run(&["usb", "unplug", "usbaudio"]),
-                "screenshot" => run(&["screen", "capture", &shot]),
-                "reboot" => run(&["reboot"]),
-                "reboot-debug" => run(&["reboot", "--mode", "debug"]),
-                "poweroff" => run(&["stop"]),
-                _ => String::new(),
+            let Some(ui) = weak.upgrade() else { return };
+            let job = match what.as_str() {
+                // Save PNG: the display as the host sees it, to the Desktop, with no part of the OS involved.
+                "screenshot" => {
+                    // In flight from the click: a second click never saves a second picture.
+                    if ui.get_saving() {
+                        return;
+                    }
+                    ui.set_saving(true);
+                    let shots = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join("Desktop");
+                    device::Job::SavePng(shots.join(format!("{device_name} {}.png", stamp())))
+                }
+                "reboot" => device::Job::Power(PowerAction::Reboot { mode: BootMode::Normal }),
+                "reboot-debug" => device::Job::Power(PowerAction::Reboot { mode: BootMode::Debug }),
+                "poweroff" => device::Job::Power(PowerAction::Poweroff),
+                _ => return,
             };
-            if let Some(ui) = weak.upgrade() {
-                ui.set_status(result.into());
-            }
+            let _ = jobs.send(job);
         });
     }
     {
-        let run = run.clone();
-        let weak = ui.as_weak();
+        let jobs = jobs.clone();
         ui.on_battery_set(move |level| {
-            let r = run(&["power", "battery", &format!("{}", level.round() as i32)]);
-            if let Some(ui) = weak.upgrade() {
-                ui.set_status(r.into());
-            }
+            let _ = jobs.send(device::Job::Battery(level.round().clamp(0.0, 100.0) as u8));
         });
     }
     {
-        let run = run.clone();
+        let jobs = jobs.clone();
         let weak = ui.as_weak();
-        ui.on_charger_set(move |on| {
-            let r = run(&["power", "charger", if on { "on" } else { "off" }]);
-            if let Some(ui) = weak.upgrade() {
-                ui.set_status(r.into());
+        ui.on_attach(move |what, on| {
+            let Some(ui) = weak.upgrade() else { return };
+            let (a, get, set): (Attachment, fn(&View) -> i32, fn(&View, i32)) = match what.as_str() {
+                "microsd" => (Attachment::Microsd, View::get_sd, View::set_sd),
+                "usb-storage" => (Attachment::UsbStorage, View::get_usb_disk, View::set_usb_disk),
+                "usb-audio" => (Attachment::UsbAudio, View::get_usb_dac, View::set_usb_dac),
+                "charger" => (Attachment::Charger, View::get_charger, View::set_charger),
+                _ => return,
+            };
+            // In flight from the click, even while the worker finishes another change: the
+            // worker's next state confirms it, or puts it back if it does not apply.
+            match (get(&ui), on) {
+                (0, true) => set(&ui, 1),
+                (2, false) => set(&ui, 3),
+                _ => return,
             }
+            let _ = jobs.send(device::Job::Attach(a, on));
         });
     }
 
@@ -335,7 +319,7 @@ fn main() -> Result<(), slint::PlatformError> {
         loop {
             match reader.next() {
                 Ok(updates) => {
-                    if updates.iter().any(|u| *u == opendap_rfb::Update::Resized) {
+                    if updates.contains(&opendap_rfb::Update::Resized) {
                         req.lock().unwrap().resized(reader.frame.width, reader.frame.height);
                     }
                     let (w, h) = (reader.frame.width as u32, reader.frame.height as u32);
@@ -383,6 +367,53 @@ fn main() -> Result<(), slint::PlatformError> {
     ui.run()
 }
 
+
+/// The worker's state, on the window.
+fn show(ui: &View, st: &device::State) {
+    ui.set_phase(match st.phase {
+        Phase::Off => 0,
+        Phase::Starting => 1,
+        Phase::Ready => 2,
+        Phase::Rebooting { .. } => 3,
+        Phase::Stopping => 4,
+    });
+    ui.set_sd(st.code(Attachment::Microsd));
+    ui.set_usb_disk(st.code(Attachment::UsbStorage));
+    ui.set_usb_dac(st.code(Attachment::UsbAudio));
+    ui.set_charger(st.code(Attachment::Charger));
+    ui.set_battery_known(st.battery.is_some());
+    ui.set_battery_busy(st.battery_busy);
+    if let Some(p) = st.battery
+        && !ui.get_battery_dragging()
+    {
+        ui.set_battery(p as f32);
+    }
+    ui.set_saving(st.saving);
+    ui.set_debug_reboot(st.debug_reboot);
+    let phase = match st.phase {
+        Phase::Off => "Off",
+        Phase::Starting => "Starting…",
+        Phase::Ready => "Running",
+        Phase::Rebooting { .. } => "Restarting…",
+        Phase::Stopping => "Powering off…",
+    };
+    let busy: Vec<&str> = Attachment::ALL
+        .into_iter()
+        .filter(|a| st.switch(*a).busy())
+        .map(|a| match a {
+            Attachment::Microsd => "microSD",
+            Attachment::UsbStorage => "USB disk",
+            Attachment::UsbAudio => "USB DAC",
+            Attachment::Charger => "charger",
+        })
+        .collect();
+    let mut status = phase.to_string();
+    if !busy.is_empty() {
+        status += &format!(" · {}", busy.join(", "));
+    }
+    ui.set_status(status.into());
+    ui.set_note(st.note.clone().into());
+}
 
 fn save_png(path: &PathBuf, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {
     let file = std::fs::File::create(path).map_err(|e| e.to_string())?;

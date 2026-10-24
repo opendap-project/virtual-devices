@@ -49,17 +49,21 @@ component Pill inherits Rectangle {
     background: touch.pressed ? (root.accent ? Palette.action : Palette.line.brighter(50%)) : (touch.has-hover ? Palette.line.brighter(22%) : Palette.line);
     border-width: 1px;
     border-color: root.accent ? Palette.action.with-alpha(0.7) : #ffffff10;
+    // The icon in a square slot at the left, as far from the left edge as from the top and the
+    // bottom; the label centred in the space that remains.
+    property <length> slot: root.height;
     HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
-        spacing: 8px;
-        alignment: center;
-        if root.glyph != "": Text { text: root.glyph; color: root.accent && !touch.pressed ? Palette.action : Palette.text; font-size: 14px; vertical-alignment: center; }
-        if root.icon.width > 0: Image { source: root.icon; colorize: Palette.text; width: 15px; height: 15px; y: (parent.height - self.height) / 2; }
+        Rectangle {
+            width: root.slot;
+            if root.glyph != "": Text { text: root.glyph; color: root.accent && !touch.pressed ? Palette.action : Palette.text; font-size: 14px; vertical-alignment: center; horizontal-alignment: center; }
+            if root.icon.width > 0: Image { source: root.icon; colorize: Palette.text; width: 15px; height: 15px; }
+        }
         VerticalLayout {
             alignment: center;
-            Text { text: root.label; color: Palette.text; font-size: 12px; overflow: elide; }
-            if root.detail != "": Text { text: root.detail; color: Palette.muted; font-size: 10px; overflow: elide; }
+            horizontal-stretch: 1;
+            padding-right: 8px;
+            Text { text: root.label; color: Palette.text; font-size: 12px; overflow: elide; horizontal-alignment: center; }
+            if root.detail != "": Text { text: root.detail; color: Palette.muted; font-size: 10px; overflow: elide; horizontal-alignment: center; }
         }
     }
     touch := TouchArea {
@@ -71,24 +75,55 @@ component Pill inherits Rectangle {
     }
 }
 
-// A switch with its label: a state of the hardware (a card in, a charger on).
+// A switch with its label: a state of the hardware (a card in, a charger on). The hardware owns
+// it: `state` is 0 off, 1 attaching, 2 on, 3 detaching. A click asks for the other side; while
+// the change is in flight the knob already stands where it goes, the track pulses and the switch
+// takes no click, until the hardware has it.
 component Toggle inherits Rectangle {
     in property <string> label;
     in property <image> icon;
-    in-out property <bool> on;
-    callback changed();
-    height: 28px;
+    in property <int> state;
+    // Off when the hardware cannot take the change now (`why` says so).
+    in property <bool> enabled: true;
+    in property <string> why;
+    in property <string> attaching: "Attaching…";
+    in property <string> detaching: "Detaching…";
+    callback toggled(bool);
+    property <bool> on: root.state == 1 || root.state == 2;
+    property <bool> busy: root.state == 1 || root.state == 3;
+    property <bool> live: root.enabled && !root.busy;
+    property <string> detail: root.busy ? (root.state == 1 ? root.attaching : root.detaching) : (root.enabled ? "" : root.why);
+    height: root.detail == "" ? 28px : 36px;
+    accessible-role: switch;
+    accessible-label: root.label;
+    accessible-checked: root.on;
+    accessible-enabled: root.live;
+    accessible-description: root.detail;
+    accessible-action-default => { if root.live { root.toggled(!root.on); } }
     HorizontalLayout {
         spacing: 8px;
-        Image { source: root.icon; colorize: root.on ? Palette.text : Palette.muted; width: 16px; height: 16px; y: (parent.height - self.height) / 2; }
-        Text { text: root.label; color: Palette.text; font-size: 12px; vertical-alignment: center; horizontal-stretch: 1; }
+        Image { source: root.icon; colorize: root.on && root.enabled ? Palette.text : Palette.muted; width: 16px; height: 16px; y: (parent.height - self.height) / 2; }
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Text { text: root.label; color: root.enabled ? Palette.text : Palette.muted; font-size: 12px; overflow: elide; }
+            if root.detail != "": Text { text: root.detail; color: Palette.muted; font-size: 10px; overflow: elide; }
+        }
         Rectangle {
             width: 34px;
             height: 18px;
             y: (parent.height - self.height) / 2;
             border-radius: 9px;
+            opacity: root.enabled ? 1 : 0.45;
             background: root.on ? #3b82c4 : Palette.line;
             animate background { duration: 120ms; }
+            // In flight: a slow pulse over the track, so it reads as waiting, not as broken.
+            Rectangle {
+                border-radius: parent.border-radius;
+                background: Palette.text;
+                opacity: root.busy ? (mod(animation-tick(), 1200ms) < 600ms ? 0.18 : 0.04) : 0;
+                animate opacity { duration: 600ms; easing: ease-in-out; }
+            }
             Rectangle {
                 width: 14px;
                 height: 14px;
@@ -100,26 +135,39 @@ component Toggle inherits Rectangle {
             }
         }
     }
-    hover := TouchArea { mouse-cursor: pointer; clicked => { root.on = !root.on; root.changed(); } }
-    background: hover.has-hover ? #ffffff08 : transparent;
+    hover := TouchArea {
+        enabled: root.live;
+        mouse-cursor: root.live ? pointer : default;
+        clicked => { root.toggled(!root.on); }
+    }
+    background: hover.has-hover && root.live ? #ffffff08 : transparent;
     border-radius: 6px;
 }
 
 // A system action: an icon button, its label below it, outside the button, so a longer label
 // never crowds the icon.
+// `busy`: its action is in flight (the label says so, `busy-label`); `enabled`: it can take one.
 component Tool inherits VerticalLayout {
     in property <image> icon;
     in property <string> label;
     in property <bool> danger;
+    in property <bool> enabled: true;
+    in property <bool> busy;
+    in property <string> busy-label;
     callback clicked();
+    property <bool> live: root.enabled && !root.busy;
     spacing: 4px;
     Rectangle {
         height: 40px;
         border-radius: 8px;
-        background: touch.pressed ? Palette.line.brighter(50%) : (touch.has-hover ? Palette.line.brighter(22%) : Palette.line);
+        opacity: root.live || root.busy ? 1 : 0.4;
+        background: root.busy ? Palette.line.brighter(mod(animation-tick(), 1200ms) < 600ms ? 40% : 10%) : (touch.pressed ? Palette.line.brighter(50%) : (touch.has-hover && root.live ? Palette.line.brighter(22%) : Palette.line));
+        animate background { duration: 600ms; easing: ease-in-out; }
         accessible-role: button;
         accessible-label: root.label;
-        accessible-action-default => { root.clicked(); }
+        accessible-enabled: root.live;
+        accessible-description: root.busy ? root.busy-label : "";
+        accessible-action-default => { if root.live { root.clicked(); } }
         Image {
             source: root.icon;
             colorize: root.danger ? #e5484d : Palette.text;
@@ -128,15 +176,64 @@ component Tool inherits VerticalLayout {
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
         }
-        touch := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+        touch := TouchArea { enabled: root.live; mouse-cursor: root.live ? pointer : default; clicked => { root.clicked(); } }
     }
     Text {
-        text: root.label;
-        color: root.danger ? #e5484d : Palette.muted;
+        text: root.busy ? root.busy-label : root.label;
+        color: root.danger && root.live ? #e5484d : Palette.muted;
         font-size: 10px;
         horizontal-alignment: center;
         wrap: word-wrap;
     }
+}
+
+// A key as printed on a keyboard.
+component Keycap inherits Rectangle {
+    in property <string> text;
+    height: 20px;
+    min-width: 22px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: #ffffff22;
+    background: Palette.line;
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+        Text { text: root.text; color: Palette.text; font-size: 11px; vertical-alignment: center; horizontal-alignment: center; }
+    }
+}
+
+// One binding: its keys, and what they do.
+component Binding inherits HorizontalLayout {
+    in property <[string]> keys;
+    in property <string> does;
+    spacing: 4px;
+    height: 24px;
+    for k in root.keys: Keycap { text: k; y: (parent.height - self.height) / 2; }
+    Text { text: root.does; color: Palette.muted; font-size: 11px; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+}
+
+// A square icon button of the sidebar's header.
+component HeaderButton inherits Rectangle {
+    in property <image> icon;
+    in property <string> label;
+    callback clicked();
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: touch.has-hover ? Palette.line : transparent;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => { root.clicked(); }
+    Image {
+        source: root.icon;
+        colorize: touch.has-hover ? Palette.text : Palette.muted;
+        width: 16px;
+        height: 16px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
 export component View inherits Window {
@@ -160,29 +257,81 @@ export component View inherits Window {
     // The status LED's colour, transparent while off (the virtual board's LED adapter drives it).
     in property <color> led: transparent;
     in-out property <bool> sidebar: true;
+    // The keyboard bindings, in a modal.
+    in-out property <bool> keymap;
+    // Under the title: what the device is doing. At the bottom: the last thing worth saying (a
+    // saved file, an error), for a few seconds.
     in property <string> status;
+    in property <string> note;
+    // The hardware's state, from the worker (src/device.rs): switch states are 0 off,
+    // 1 attaching, 2 on, 3 detaching.
     in-out property <float> battery: 50;
-    in-out property <bool> charger;
-    in-out property <bool> sd;
-    in-out property <bool> usb-disk;
-    in-out property <bool> usb-dac;
+    in property <bool> battery-known;
+    in property <bool> battery-busy;
+    in-out property <bool> battery-dragging;
+    in property <int> charger;
+    in property <int> sd;
+    in property <int> usb-disk;
+    in property <int> usb-dac;
+    // The device as a whole: 0 off, 1 starting, 2 ready, 3 rebooting, 4 stopping.
+    in property <int> phase;
+    in property <bool> debug-reboot;
+    in property <bool> saving;
 
     callback screen-pointer(string, length, length);
     callback key(string, bool);
     callback combo(bool);
     callback action(string);
     callback battery-set(float);
-    callback charger-set(bool);
+    callback attach(string, bool);
     callback host-key(string, bool);
 
     title: root.name;
     background: Palette.page;
 
-    // The host keyboard drives the device's controls (the faceplate's host keys).
+    // The host keyboard drives the whole window, mouse or not. Plain keys are the device's
+    // controls and are held as long as the key is (the faceplate's host keys: Space, ↑, ↓, P, and ← → as ↑ ↓;
+    // S holds Main + Vol −). With ⌘ they are the sidebar's actions, under the same rules as a
+    // click: nothing in flight is asked twice, nothing disabled is taken. A key the OS repeats
+    // while held is one press, as on the hardware.
     forward-focus: keys-in;
     keys-in := FocusScope {
-        key-pressed(e) => { root.host-key(e.text, true); accept }
-        key-released(e) => { root.host-key(e.text, false); accept }
+        key-pressed(e) => {
+            if e.repeat { return accept; }
+            if (e.modifiers.control || e.modifiers.meta) && (e.text == "k" || e.text == "K" || e.text == "/") { root.keymap = !root.keymap; return accept; }
+            // The modal leaves the rest inert: Esc, ⌘K, its X or a click outside closes it.
+            if root.keymap {
+                return accept;
+            }
+            if e.modifiers.control || e.modifiers.meta {
+                if e.text == "s" || e.text == "S" { root.action("screenshot"); }
+                else if (e.text == "r" || e.text == "R") && root.phase == 2 { root.action(e.modifiers.shift ? "reboot-debug" : "reboot"); }
+                else if (e.text == "p" || e.text == "P") && e.modifiers.shift && root.phase == 2 { root.action("poweroff"); }
+                else if e.text == "1" { root.attach("microsd", root.sd == 0); }
+                else if e.text == "2" { root.attach("usb-storage", root.usb-disk == 0); }
+                else if e.text == "3" { root.attach("usb-audio", root.usb-dac == 0); }
+                else if e.text == "4" && root.battery-known { root.attach("charger", root.charger == 0); }
+                else if (e.text == "-" || e.text == "[") && root.battery-known && !root.battery-busy { root.battery = max(0, round(root.battery) - 5); root.battery-set(root.battery); }
+                else if (e.text == "=" || e.text == "+" || e.text == "]") && root.battery-known && !root.battery-busy { root.battery = min(100, round(root.battery) + 5); root.battery-set(root.battery); }
+                else if e.text == "\\" { root.sidebar = !root.sidebar; }
+                else { return reject; }
+                return accept;
+            }
+            if e.text == "s" { root.combo(true); return accept; }
+            root.host-key(e.text, true);
+            accept
+        }
+        key-released(e) => {
+            // Esc closes on its release: macOS hands the window only the release of Esc.
+            if root.keymap {
+                if e.text == Key.Escape { root.keymap = false; }
+                return accept;
+            }
+            if e.modifiers.control || e.modifiers.meta { return accept; }
+            if e.text == "s" { root.combo(false); return accept; }
+            root.host-key(e.text, false);
+            accept
+        }
     }
 
     HorizontalLayout {
@@ -277,6 +426,24 @@ export component View inherits Window {
                 }
                 grip := TouchArea { mouse-cursor: pointer; clicked => { root.sidebar = !root.sidebar; } }
             }
+            if root.sidebar && root.note != "": Text {
+                x: 12px;
+                y: parent.height - self.height - 12px;
+                width: parent.width - 24px;
+                text: root.note;
+                color: Palette.muted;
+                font-size: 11px;
+                wrap: no-wrap;
+                overflow: elide;
+                accessible-role: text;
+            }
+            if root.sidebar: HeaderButton {
+                x: fold.x - self.width - 2px;
+                y: 8px;
+                icon: @image-url("icons/keyboard.svg");
+                label: "Keyboard bindings";
+                clicked => { root.keymap = true; }
+            }
             if root.sidebar: VerticalLayout {
                 x: 0;
                 width: parent.width;
@@ -286,10 +453,11 @@ export component View inherits Window {
 
                 VerticalLayout {
                     spacing: 2px;
-                    // Clear of the fold button at the top right.
-                    padding-right: 36px;
+                    // Clear of the keyboard and fold buttons at the top right.
+                    padding-right: 74px;
                     Text { text: root.name; color: Palette.text; font-size: 14px; font-weight: 600; }
-                    Text { text: root.status == "" ? "Running" : root.status; color: Palette.muted; font-size: 11px; wrap: word-wrap; max-height: 30px; overflow: elide; }
+                    // One line, always: a note never moves the sidebar.
+                    Text { text: root.status; color: Palette.muted; font-size: 11px; wrap: no-wrap; overflow: elide; }
                 }
 
                 Section {
@@ -320,32 +488,114 @@ export component View inherits Window {
                         Slider {
                             minimum: 0;
                             maximum: 100;
+                            enabled: root.battery-known && !root.battery-busy;
                             value <=> root.battery;
-                            released => { root.battery-set(root.battery); }
+                            changed => { root.battery-dragging = true; }
+                            released => { root.battery-dragging = false; root.battery-set(root.battery); keys-in.focus(); }
                         }
                     }
-                    Toggle { icon: @image-url("icons/battery-charging.svg"); label: "Charger on USB-C"; on <=> root.charger; changed => { root.charger-set(root.charger); } }
+                    // The battery and charger are the board's battery model, on the device: they
+                    // take changes once it runs.
+                    Toggle {
+                        icon: @image-url("icons/battery-charging.svg");
+                        label: "Charger on USB-C";
+                        state: root.charger;
+                        enabled: root.battery-known;
+                        why: "Once the device runs";
+                        attaching: "Connecting…";
+                        detaching: "Disconnecting…";
+                        toggled(on) => { root.attach("charger", on); }
+                    }
                 }
 
                 Section {
                     title: "STORAGE";
-                    Toggle { icon: @image-url("icons/microsd.svg"); label: "microSD card"; on <=> root.sd; changed => { root.action(root.sd ? "sd-insert" : "sd-eject"); } }
-                    Toggle { icon: @image-url("icons/usb.svg"); label: "USB disk"; on <=> root.usb-disk; changed => { root.action(root.usb-disk ? "usb-disk" : "usb-disk-out"); } }
-                    Toggle { icon: @image-url("icons/dac.svg"); label: "USB DAC"; on <=> root.usb-dac; changed => { root.action(root.usb-dac ? "usb-audio" : "usb-audio-out"); } }
+                    // The hardware takes these at any time, booting or not, as a real socket does.
+                    Toggle { icon: @image-url("icons/microsd.svg"); label: "microSD card"; state: root.sd; attaching: "Inserting…"; detaching: "Ejecting…"; toggled(on) => { root.attach("microsd", on); } }
+                    Toggle { icon: @image-url("icons/usb.svg"); label: "USB disk"; state: root.usb-disk; attaching: "Plugging in…"; detaching: "Unplugging…"; toggled(on) => { root.attach("usb-storage", on); } }
+                    Toggle { icon: @image-url("icons/dac.svg"); label: "USB DAC"; state: root.usb-dac; attaching: "Plugging in…"; detaching: "Unplugging…"; toggled(on) => { root.attach("usb-audio", on); } }
                 }
 
                 Section {
                     title: "SYSTEM";
                     HorizontalLayout {
                         spacing: 6px;
-                        Tool { icon: @image-url("icons/screenshot.svg"); label: "Save PNG"; width: (parent.width - 18px) / 4; clicked => { root.action("screenshot"); } }
-                        Tool { icon: @image-url("icons/restart.svg"); label: "Reboot"; width: (parent.width - 18px) / 4; clicked => { root.action("reboot"); } }
-                        Tool { icon: @image-url("icons/developer.svg"); label: "Debug"; width: (parent.width - 18px) / 4; clicked => { root.action("reboot-debug"); } }
-                        Tool { icon: @image-url("icons/power.svg"); label: "Power off"; width: (parent.width - 18px) / 4; danger: true; clicked => { root.action("poweroff"); } }
+                        // Restarts and power-off take a ready device, once: the one in flight
+                        // shows it, the others wait for it.
+                        Tool { icon: @image-url("icons/screenshot.svg"); label: "Save PNG"; busy: root.saving; busy-label: "Saving…"; width: (parent.width - 18px) / 4; clicked => { root.action("screenshot"); } }
+                        Tool { icon: @image-url("icons/restart.svg"); label: "Reboot"; enabled: root.phase == 2; busy: root.phase == 3 && !root.debug-reboot; busy-label: "Restarting…"; width: (parent.width - 18px) / 4; clicked => { root.action("reboot"); } }
+                        Tool { icon: @image-url("icons/developer.svg"); label: "Debug"; enabled: root.phase == 2; busy: root.phase == 3 && root.debug-reboot; busy-label: "Restarting…"; width: (parent.width - 18px) / 4; clicked => { root.action("reboot-debug"); } }
+                        Tool { icon: @image-url("icons/power.svg"); label: "Power off"; enabled: root.phase == 2; busy: root.phase == 4; busy-label: "Powering off…"; width: (parent.width - 18px) / 4; danger: true; clicked => { root.action("poweroff"); } }
                     }
                 }
             }
         }
+        }
+    }
+
+    // The keyboard bindings. Closed by its X, a click outside it, or Esc.
+    if root.keymap: Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        background: #000000a0;
+        TouchArea { clicked => { root.keymap = false; keys-in.focus(); } }
+        Rectangle {
+            width: min(root.width - 32px, 560px);
+            height: min(root.height - 32px, body.preferred-height);
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: Palette.panel;
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: Palette.line;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #00000080;
+            accessible-role: groupbox;
+            accessible-label: "Keyboard bindings";
+            // Clicks inside the dialog stay in it.
+            TouchArea { }
+            body := VerticalLayout {
+                padding: 16px;
+                spacing: 12px;
+                HorizontalLayout {
+                    Text { text: "Keyboard"; color: Palette.text; font-size: 14px; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; }
+                    HeaderButton { icon: @image-url("icons/x.svg"); label: "Close"; clicked => { root.keymap = false; keys-in.focus(); } }
+                }
+                HorizontalLayout {
+                    spacing: 24px;
+                    alignment: start;
+                    Section {
+                        title: "DEVICE · held as long as the key";
+                        horizontal-stretch: 1;
+                        alignment: start;
+                        Binding { keys: ["Space"]; does: "Action"; }
+                        Binding { keys: ["P"]; does: "Main"; }
+                        Binding { keys: ["←", "↑"]; does: "Volume + (either)"; }
+                        Binding { keys: ["→", "↓"]; does: "Volume − (either)"; }
+                        Binding { keys: ["S"]; does: "Screenshot (Main + Vol −)"; }
+                        Binding { keys: ["P", "↓"]; does: "The same, by hand"; }
+                    }
+                    Section {
+                        title: "SIMULATOR";
+                        horizontal-stretch: 1;
+                        alignment: start;
+                        Binding { keys: ["⌘", "S"]; does: "Save PNG"; }
+                        Binding { keys: ["⌘", "R"]; does: "Reboot"; }
+                        Binding { keys: ["⌘", "⇧", "R"]; does: "Reboot into debug"; }
+                        Binding { keys: ["⌘", "⇧", "P"]; does: "Power off"; }
+                        Binding { keys: ["⌘", "1"]; does: "microSD card in / out"; }
+                        Binding { keys: ["⌘", "2"]; does: "USB disk in / out"; }
+                        Binding { keys: ["⌘", "3"]; does: "USB DAC in / out"; }
+                        Binding { keys: ["⌘", "4"]; does: "Charger on / off"; }
+                        Binding { keys: ["⌘", "−"]; does: "Battery −5 %"; }
+                        Binding { keys: ["⌘", "="]; does: "Battery +5 %"; }
+                        Binding { keys: ["⌘", "\\"]; does: "Fold the sidebar"; }
+                        Binding { keys: ["⌘", "K"]; does: "These bindings"; }
+                    }
+                }
+            }
         }
     }
 }

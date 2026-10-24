@@ -3069,7 +3069,11 @@ dependencies = [
 name = "odap-vdev-view"
 version = "0.1.0"
 dependencies = [
+ "opendap-core",
+ "opendap-model",
  "opendap-rfb",
+ "opendap-transport-ssh",
+ "opendap-transport-vm",
  "png",
  "serde",
  "serde_json",
@@ -3088,8 +3092,57 @@ dependencies = [
 ]
 
 [[package]]
+name = "opendap-core"
+version = "0.1.0"
+source = "git+https://github.com/opendap-project/cli?rev=e82b2a5#e82b2a5d4b093f25fa30709dc589342f1963e2b4"
+dependencies = [
+ "opendap-model",
+ "serde_json",
+]
+
+[[package]]
+name = "opendap-host"
+version = "0.1.0"
+source = "git+https://github.com/opendap-project/cli?rev=e82b2a5#e82b2a5d4b093f25fa30709dc589342f1963e2b4"
+dependencies = [
+ "opendap-core",
+ "opendap-model",
+]
+
+[[package]]
+name = "opendap-model"
+version = "0.1.0"
+source = "git+https://github.com/opendap-project/cli?rev=e82b2a5#e82b2a5d4b093f25fa30709dc589342f1963e2b4"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "opendap-rfb"
 version = "0.1.0"
+
+[[package]]
+name = "opendap-transport-ssh"
+version = "0.1.0"
+source = "git+https://github.com/opendap-project/cli?rev=e82b2a5#e82b2a5d4b093f25fa30709dc589342f1963e2b4"
+dependencies = [
+ "opendap-core",
+ "opendap-host",
+ "opendap-model",
+]
+
+[[package]]
+name = "opendap-transport-vm"
+version = "0.1.0"
+source = "git+https://github.com/opendap-project/cli?rev=e82b2a5#e82b2a5d4b093f25fa30709dc589342f1963e2b4"
+dependencies = [
+ "opendap-core",
+ "opendap-host",
+ "opendap-model",
+ "serde_json",
+]
 
 [[package]]
 name = "orbclient"

@@ -42,6 +42,8 @@ def parser():
     s.add_argument("--mode", default="normal", help="normal, debug, or a mode of the board (reboot --list)")
     s.add_argument("--debug", action="store_const", const="debug", dest="mode", help="the same as --mode debug")
     s.add_argument("--list", action="store_true", help="the boot modes the device has")
+    s = sub.add_parser("hw", help="the virtual hardware's physical state: card, USB, charger, battery")
+    s.add_argument("--json", action="store_true")
     s = sub.add_parser("status", help="state and endpoints")
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("ssh", help="a shell, or a command, on the device")
@@ -59,6 +61,9 @@ def parser():
                         "several are pressed together, in order, and released together")
     s.add_argument("--hold", type=int, default=100, metavar="MS",
                    help="how long; main held as long as the board's PMIC time cuts the power")
+    s = inp.add_parser("key", help="press or release a control by its role, as a finger does")
+    s.add_argument("role")
+    s.add_argument("state", choices=["down", "up"])
     s = inp.add_parser("tap", help="touch a display pixel")
     s.add_argument("x", type=int); s.add_argument("y", type=int)
     s.add_argument("--hold", type=int, default=80, metavar="MS")
@@ -71,7 +76,7 @@ def parser():
     usb.add_parser("list")
     s = usb.add_parser("plug", help="plug a device")
     s.add_argument("kind", choices=["storage", "audio"])
-    s.add_argument("file", nargs="?", help="raw disk image (storage)")
+    s.add_argument("file", nargs="?", help="raw disk image (storage; default: the simulator's own 1 GiB stick, in the instance's state)")
     s.add_argument("--id")
     s = usb.add_parser("unplug")
     s.add_argument("id")
@@ -169,6 +174,13 @@ def run(args):
             for k, v in st["endpoints"].items():
                 print(f"  {k}: {v}")
             print(f"  image: {st['image']['path']} ({'present' if st['image']['present'] else 'missing'})")
+    elif c == "hw":
+        hw = inst.hardware()
+        if args.json:
+            print(json.dumps(hw))
+        else:
+            print(f"microSD: {'in' if hw['sd'] else 'out'}; USB: {', '.join(hw['usb']) or 'none'}; "
+                  f"charger: {'on' if hw['charger'] else 'off'}; battery: {hw['battery'] if hw['battery'] is not None else '?'} %")
     elif c == "ssh":
         argv = args.argv[1:] if args.argv[:1] == ["--"] else args.argv
         os.execvp("ssh", inst.ssh_argv(argv))
@@ -180,7 +192,14 @@ def run(args):
         print(args.file)
     elif c == "input":
         q = qmp(inst)
-        if args.action == "press":
+        if args.action == "key":
+            qcodes = [k["qcode"] for k in compose.controls(inst.model) if k["role"] == args.role and k.get("qcode")]
+            if not qcodes:
+                roles = sorted({k["role"] for k in compose.controls(inst.model)})
+                raise ValueError(f"no control with role {args.role!r} (roles: {', '.join(roles)})")
+            q.key(qcodes[0], args.state == "down")
+            print(f"{args.role} {args.state}")
+        elif args.action == "press":
             controls = compose.controls(inst.model)
             keys = []
             for role in args.roles:
@@ -229,10 +248,16 @@ def run(args):
             print(q.cmd("human-monitor-command", **{"command-line": "info usb"}).strip() or "no USB devices")
         elif args.action == "plug":
             if args.kind == "storage":
-                if not args.file:
-                    raise ValueError("usb plug storage needs FILE, a raw disk image")
+                image = args.file
+                if not image:
+                    # The simulator's own stick: sparse, kept in the instance's state.
+                    path = inst.state / "usb-disk.img"
+                    if not path.exists():
+                        with open(path, "wb") as f:
+                            f.truncate(compose.SD_DEFAULT)
+                    image = str(path)
                 dev = args.id or "usbdisk"
-                q.cmd("blockdev-add", **{"driver": "raw", "node-name": dev, "file": {"driver": "file", "filename": os.path.abspath(args.file)}})
+                q.cmd("blockdev-add", **{"driver": "raw", "node-name": dev, "file": {"driver": "file", "filename": os.path.abspath(image)}})
                 q.cmd("device_add", driver="usb-storage", id=dev, drive=dev, bus="xhci.0")
             else:
                 dev = args.id or "usbaudio"
