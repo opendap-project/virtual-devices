@@ -1,0 +1,16 @@
+# What runs inside the guest of a virtual device to stand in for hardware QEMU does not emulate
+# (virtual-devices ADR 0001): the faceplate's status LED and ambient light sensor, as HID devices
+# through uhid, so the guest kernel's own drivers (hid-led, hid-sensor-als) expose them exactly as
+# real hardware would. Built for the guest and deployed with `odapkit deploy` from here.
+[workspace]
+resolver = "3"
+members = ["crates/odap-vdev-hw"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.89"
+license = "GPL-3.0-or-later"
+
+[workspace.metadata.odap]
+deploy = ["odap-vdev-hw"]
+restart = ["odap-vdev-hw.service"]

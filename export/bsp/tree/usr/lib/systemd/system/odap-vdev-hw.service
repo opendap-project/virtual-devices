@@ -1,0 +1,17 @@
+# The virtual board's faceplate hardware that QEMU does not emulate: the status LED and the
+# ambient light sensor, as HID devices through uhid (board/crates/odap-vdev-hw), so the guest's
+# drivers expose them as LED class devices and an IIO sensor, as on real hardware.
+[Unit]
+Description=Virtual board faceplate hardware (status LED, ambient light sensor)
+DefaultDependencies=no
+After=systemd-modules-load.service
+Before=odap-shell.service
+ConditionPathExists=/usr/bin/odap-vdev-hw
+
+[Service]
+ExecStartPre=-/usr/sbin/modprobe uhid
+ExecStart=/usr/bin/odap-vdev-hw
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

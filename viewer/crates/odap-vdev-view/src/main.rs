@@ -322,6 +322,12 @@ fn main() -> Result<(), slint::PlatformError> {
     }
     {
         let jobs = jobs.clone();
+        ui.on_light_set(move |position| {
+            let _ = jobs.send(device::Job::Light(slider_to_lux(position)));
+        });
+    }
+    {
+        let jobs = jobs.clone();
         let weak = ui.as_weak();
         let debug_jobs = jobs.clone();
         let debug_weak = ui.as_weak();
@@ -445,6 +451,20 @@ fn show(ui: &View, st: &device::State) {
     ui.set_charger(st.code(Attachment::Charger));
     ui.set_battery_known(st.battery.is_some());
     ui.set_battery_busy(st.battery_busy);
+    // The status LED as the device drives it; off, nothing is drawn over the unlit part.
+    ui.set_led(match st.status_led {
+        Some([0, 0, 0]) | None => slint::Color::from_argb_u8(0, 0, 0, 0),
+        Some([r, g, b]) => slint::Color::from_rgb_u8(r, g, b),
+    });
+    ui.set_light_known(st.light.is_some());
+    ui.set_mic_live(st.mic_live);
+    // Read the sensor's light once, as the battery: the slider then shows what it sent.
+    if let Some(lux) = st.light
+        && !ui.get_light_seeded()
+    {
+        ui.set_light(lux_to_slider(lux));
+        ui.set_light_seeded(true);
+    }
 
     // Read the hardware's charge once; after that the slider shows only what it sent.
     if let Some(p) = st.battery
@@ -524,3 +544,14 @@ fn stamp() -> String {
     let y = yoe + era * 400 + i64::from(m <= 2);
     format!("{y:04}-{m:02}-{d:02} {:02}.{:02}.{:02}", rem / 3600, rem / 60 % 60, rem % 60)
 }
+
+/// The light slider is logarithmic, as the eye is: 0 is darkness, 1 is 10 lx, 5 is 100 000 lx
+/// (direct sun); 0.0 to 5.0 maps to `10^p − 1`.
+fn slider_to_lux(position: f32) -> u32 {
+    (10f64.powf(position.clamp(0.0, 5.0) as f64) - 1.0).round() as u32
+}
+
+fn lux_to_slider(lux: u32) -> f32 {
+    ((lux as f64) + 1.0).log10() as f32
+}
+

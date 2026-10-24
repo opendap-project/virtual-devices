@@ -59,6 +59,18 @@ y_mm = -41.435
 d_mm = 0.8
 color = "#050505"
 
+# The status LED and the ambient light sensor, as Linux exposes them in the guest: the virtual
+# board makes them as HID devices (board/crates/odap-vdev-hw) that hid-led and hid-sensor-als
+# drive. The microphone's privacy light is hardware-tied and never described (BRD-027).
+[[indicators]]
+role = "status"
+colors = "rgb"
+linux = "thingm0"
+
+[[sensors]]
+kind = "ambient-light"
+iio = "als"
+
 [touch]
 resolution_x = 32768
 resolution_y = 32768

@@ -35,11 +35,37 @@ export global Palette {
     out property <color> muted: #9aa0a6;
 }
 
+// A group of the sidebar: its title bar folds and unfolds it (a click, or Enter and Space on
+// it), so the sidebar stays short as groups are added; the chevron says which.
 component Section inherits VerticalLayout {
     in property <string> title;
+    in-out property <bool> open: true;
     spacing: 6px;
-    Text { text: root.title; color: Palette.muted; font-size: 11px; font-weight: 600; }
-    @children
+    head := Rectangle {
+        height: 18px;
+        accessible-role: button;
+        accessible-label: root.title;
+        accessible-description: root.open ? "Expanded" : "Collapsed";
+        accessible-action-default => { root.open = !root.open; }
+        HorizontalLayout {
+            spacing: 6px;
+            Text { text: root.title; color: head-touch.has-hover ? Palette.text : Palette.muted; font-size: 11px; font-weight: 600; vertical-alignment: center; }
+            Text { text: root.open ? "▾" : "▸"; color: Palette.muted; font-size: 10px; vertical-alignment: center; horizontal-stretch: 1; }
+        }
+        head-touch := TouchArea { mouse-cursor: pointer; clicked => { root.open = !root.open; } }
+    }
+    Rectangle {
+        clip: true;
+        height: root.open ? body.preferred-height : 0;
+        visible: root.open || self.height > 0;
+        animate height { duration: 160ms; easing: ease-out; }
+        body := VerticalLayout {
+            y: 0;
+            height: self.preferred-height;
+            spacing: 6px;
+            @children
+        }
+    }
 }
 
 // A control of the device in the sidebar: pressed while the mouse button is down, so long
@@ -307,6 +333,13 @@ export component View inherits Window {
     // the hardware's charge is read once, when the window opens (main.rs).
     in-out property <bool> battery-seeded;
     in-out property <bool> battery-dragging;
+    // The faceplate's ambient light sensor: the slider's position is log10(lux + 1), 0 to 5.
+    in-out property <float> light: 2;
+    in property <bool> light-known;
+    // The microphone is live: the faceplate's privacy light, tied to its power (BRD-027).
+    in property <bool> mic-live;
+    in-out property <bool> light-seeded;
+    callback light-set(float);
     in property <int> charger;
     in property <int> sd;
     in property <int> usb-disk;
@@ -563,6 +596,49 @@ export component View inherits Window {
                         attaching: "Connecting…";
                         detaching: "Disconnecting…";
                         toggled(on) => { root.attach("charger", on); }
+                    }
+                }
+
+                Section {
+                    title: "SENSORS";
+                    // The light that falls on the faceplate's sensor, which the device reads as an
+                    // IIO illuminance (odap-vdev-hw); fire and forget, as the battery.
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Image { source: @image-url("icons/light.svg"); colorize: Palette.text; width: 16px; height: 16px; y: (parent.height - self.height) / 2; }
+                        Text {
+                            text: !root.light-known ? "– lx" : (root.light >= 4 ? round((pow(10, root.light) - 1) / 1000) + " klx" : round(pow(10, root.light) - 1) + " lx");
+                            color: Palette.text; font-size: 12px; vertical-alignment: center; min-width: 52px;
+                        }
+                        Slider {
+                            minimum: 0;
+                            maximum: 5;
+                            enabled: root.light-known;
+                            value <=> root.light;
+                            changed => { root.light-set(root.light); }
+                            released => { root.light-set(root.light); keys-in.focus(); }
+                        }
+                    }
+                    // The microphone: live while the device records (its privacy light), never
+                    // switched from here: the light follows the hardware.
+                    HorizontalLayout {
+                        spacing: 8px;
+                        height: 22px;
+                        Rectangle {
+                            width: 16px;
+                            Rectangle {
+                                width: 8px;
+                                height: 8px;
+                                x: 4px;
+                                y: (parent.height - self.height) / 2;
+                                border-radius: 4px;
+                                background: root.mic-live ? #ff9f0a : transparent;
+                                border-width: 1px;
+                                border-color: root.mic-live ? #ff9f0a : Palette.muted;
+                            }
+                        }
+                        Text { text: "Microphone"; color: Palette.text; font-size: 12px; vertical-alignment: center; horizontal-stretch: 1; }
+                        Text { text: root.mic-live ? "Live" : "Off"; color: root.mic-live ? Palette.text : Palette.muted; font-size: 12px; vertical-alignment: center; }
                     }
                 }
 

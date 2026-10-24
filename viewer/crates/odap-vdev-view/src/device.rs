@@ -36,6 +36,12 @@ pub struct State {
     pub battery: Option<u8>,
     /// A battery change is in flight.
     pub battery_busy: bool,
+    /// The colour the faceplate's status LED shows, as the device set it.
+    pub status_led: Option<[u8; 3]>,
+    /// The light on the faceplate's ambient light sensor, in lux.
+    pub light: Option<u32>,
+    /// The microphone is live (its privacy light on), as the board reports it.
+    pub mic_live: bool,
     /// The reboot in flight goes into the debug mode.
     pub debug_reboot: bool,
     /// A display capture is in flight.
@@ -68,6 +74,12 @@ fn index(a: Attachment) -> usize {
 pub enum Job {
     Attach(Attachment, bool),
     Battery(u8),
+    /// The light on the sensor, fire-and-forget as the battery.
+    Light(u32),
+    /// The status LED changed on the device (from the board's events).
+    Led([u8; 3]),
+    /// The microphone went live or quiet (from the board's events).
+    Mic(bool),
     SavePng(PathBuf),
     DebugUi(bool),
     Power(PowerAction),
@@ -88,11 +100,71 @@ pub struct Worker {
     pub jobs: Sender<Job>,
 }
 
+/// Keeps only the last queued job that `of` matches: values sent fire-and-forget.
+fn latest_only(queue: &mut Vec<Job>, of: impl Fn(&Job) -> bool) {
+    if let Some(last) = queue.iter().rposition(&of) {
+        let mut i = 0;
+        queue.retain(|j| {
+            let keep = !of(j) || i == last;
+            i += 1;
+            keep
+        });
+    }
+}
+
+/// Follows the faceplate's status LED and microphone as the device changes them: a blocking read
+/// of the board's events (odap-vdev-hw), so nothing polls; reopened when the device restarts.
+fn watch_board(vd_dir: PathBuf, jobs: Sender<Job>) {
+    use std::io::{BufRead, BufReader};
+    let odap_vdev = vd_dir.join("bin/odap-vdev");
+    loop {
+        let child = std::process::Command::new(&odap_vdev)
+            // Opened for reading and writing, the FIFO never reports its end between two changes,
+            // so none is lost while the reader would reopen it.
+            .args([
+                "ssh",
+                "--",
+                // The current state first, then each change as it happens.
+                "until [ -p /run/opendap/vdev/events ]; do sleep 2; done; cd /run/opendap/vdev; \
+                 exec 3<>events; echo \"led $(cat led)\"; echo \"mic $(cat mic)\"; exec cat <&3",
+            ])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+        if let Ok(mut child) = child {
+            if let Some(out) = child.stdout.take() {
+                for line in BufReader::new(out).lines().map_while(Result::ok) {
+                    let mut words = line.split_whitespace();
+                    let job = match words.next() {
+                        Some("led") => {
+                            let c: Vec<u8> = words.filter_map(|v| v.parse().ok()).collect();
+                            <[u8; 3]>::try_from(c).ok().map(Job::Led)
+                        }
+                        Some("mic") => Some(Job::Mic(words.next() == Some("1"))),
+                        _ => None,
+                    };
+                    if let Some(job) = job
+                        && jobs.send(job).is_err()
+                    {
+                        let _ = child.kill();
+                        return;
+                    }
+                }
+            }
+            let _ = child.wait();
+        }
+        thread::sleep(Duration::from_secs(3));
+    }
+}
+
 impl Worker {
     /// Starts the worker for the device of the checkout at `vd_dir`; `publish` gets every new
     /// state, on the worker's thread.
     pub fn start(vd_dir: PathBuf, publish: impl Fn(State) + Send + 'static) -> Self {
         let (tx, rx) = channel();
+        let (dir, led_jobs) = (vd_dir.clone(), tx.clone());
+        thread::spawn(move || watch_board(dir, led_jobs));
         thread::spawn(move || Run::new(vd_dir).run(rx, publish));
         Worker { jobs: tx }
     }
@@ -189,6 +261,8 @@ impl Run {
                 }
                 // What the hardware reports, always: the window's readout follows it.
                 self.state.battery = hw.battery;
+                self.state.status_led = hw.status_led;
+                self.state.light = hw.light;
             }
             Err(e) => self.note(e.message),
         }
@@ -205,14 +279,9 @@ impl Run {
                     // state machines drop what no longer applies. Values sent fire-and-forget (the
                     // battery) keep only the latest.
                     let mut queue: Vec<Job> = std::iter::once(job).chain(rx.try_iter()).collect();
-                    if let Some(last) = queue.iter().rposition(|j| matches!(j, Job::Battery(_))) {
-                        let mut i = 0;
-                        queue.retain(|j| {
-                            let keep = !matches!(j, Job::Battery(_)) || i == last;
-                            i += 1;
-                            keep
-                        });
-                    }
+                    latest_only(&mut queue, |j| matches!(j, Job::Battery(_)));
+                    latest_only(&mut queue, |j| matches!(j, Job::Light(_)));
+                    latest_only(&mut queue, |j| matches!(j, Job::Led(_)));
                     for job in queue {
                         self.job(job, &publish);
                     }
@@ -254,6 +323,14 @@ impl Run {
                 }
                 self.state.battery_busy = false;
             }
+            Job::Light(lux) => {
+                let change = HardwareChange::Light { lux };
+                if let Err(e) = hardware::change(&self.vm, self.target.clone(), change, false) {
+                    self.note(e.message);
+                }
+            }
+            Job::Led(rgb) => self.state.status_led = Some(rgb),
+            Job::Mic(live) => self.state.mic_live = live,
             Job::SavePng(path) => {
                 if self.state.saving {
                     return;

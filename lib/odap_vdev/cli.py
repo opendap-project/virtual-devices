@@ -100,6 +100,9 @@ def parser():
     s.add_argument("level", nargs="?", type=int)
     s = power.add_parser("charger", help="whether a charger is connected, or connect or disconnect it")
     s.add_argument("state", nargs="?", choices=["on", "off"])
+    s = sub.add_parser("light", help="the light on the ambient light sensor in lux, or set it")
+    s.add_argument("lux", nargs="?", type=int)
+    s = sub.add_parser("led", help="the colour the status LED shows (r g b, 0-255)")
     return p
 
 
@@ -208,7 +211,17 @@ def run(args):
             print(json.dumps(hw))
         else:
             print(f"microSD: {'in' if hw['sd'] else 'out'}; USB: {', '.join(hw['usb']) or 'none'}; "
-                  f"charger: {'on' if hw['charger'] else 'off'}; battery: {hw['battery'] if hw['battery'] is not None else '?'} %")
+                  f"charger: {'on' if hw['charger'] else 'off'}; battery: {hw['battery'] if hw['battery'] is not None else '?'} %; "
+                  f"LED: {' '.join(map(str, hw['led'])) if hw['led'] else '?'}; light: {hw['light'] if hw['light'] is not None else '?'} lx")
+    elif c == "light":
+        # The faceplate's sensor (odap-vdev-hw): the guest's driver reads it as an IIO device.
+        if args.lux is not None:
+            if not 0 <= args.lux <= 100000:
+                raise ValueError("light: 0 to 100000 lux")
+            inst.ssh(f"echo 'als {args.lux}' > /run/opendap/vdev/hw")
+        print(inst.ssh("cat", "/run/opendap/vdev/als").stdout.strip() + " lx")
+    elif c == "led":
+        print(inst.ssh("cat", "/run/opendap/vdev/led").stdout.strip())
     elif c == "ssh":
         argv = args.argv[1:] if args.argv[:1] == ["--"] else args.argv
         os.execvp("ssh", inst.ssh_argv(argv))

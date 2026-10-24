@@ -239,13 +239,21 @@ class Instance:
         q = Qmp(self.qmp_socket)
         sd = any(b.get("qdev") == "sd0" and "inserted" in b for b in q.cmd("query-block"))
         usb = re.findall(r"ID: (\S+)", q.cmd("human-monitor-command", **{"command-line": "info usb"}) or "")
-        charger, battery = False, None
-        r = self.ssh("cat /sys/module/test_power/parameters/usb_online /sys/module/test_power/parameters/battery_capacity", check=False)
+        charger, battery, led, light, mic = False, None, None, None, None
+        # One round trip: the battery model, then the faceplate (odap-vdev-hw), each line or "-".
+        r = self.ssh("for f in /sys/module/test_power/parameters/usb_online /sys/module/test_power/parameters/battery_capacity "
+                     "/run/opendap/vdev/led /run/opendap/vdev/als /run/opendap/vdev/mic; do (cat $f 2>/dev/null || echo -) | head -1; done", check=False)
         if r.returncode == 0:
-            lines = r.stdout.split()
-            charger = bool(lines) and lines[0].strip() in ("on", "1")
-            battery = int(lines[1]) if len(lines) > 1 and lines[1].isdigit() else None
-        return {"schema": "opendap.vdev-hardware/v1", "sd": sd, "usb": usb, "charger": charger, "battery": battery}
+            lines = [l.strip() for l in r.stdout.splitlines()] + ["-"] * 5
+            charger = lines[0] in ("on", "1")
+            battery = int(lines[1]) if lines[1].isdigit() else None
+            rgb = lines[2].split()
+            led = [int(v) for v in rgb] if len(rgb) == 3 and all(v.isdigit() for v in rgb) else None
+            light = int(lines[3]) if lines[3].isdigit() else None
+            mic = {"1": True, "0": False}.get(lines[4])
+        # The status LED shows (r, g, b, 0–255); light is the lux the ambient light sensor sees.
+        return {"schema": "opendap.vdev-hardware/v1", "sd": sd, "usb": usb, "charger": charger, "battery": battery,
+                "led": led, "light": light, "mic": mic}
 
     def boot_modes(self):
         return self.ssh("odap-reboot", "--list").stdout.split()

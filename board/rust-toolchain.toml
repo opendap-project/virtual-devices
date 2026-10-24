@@ -1,0 +1,5 @@
+# One pinned toolchain for every developer host (toolkit-host development workflow).
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+

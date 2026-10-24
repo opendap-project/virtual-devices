@@ -1,0 +1,10 @@
+[package]
+name = "odap-vdev-hw"
+version = "0.1.0"
+description = "The virtual board's faceplate hardware in the guest: a status LED and an ambient light sensor as uhid devices"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+libc = "0.2"

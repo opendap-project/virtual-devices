@@ -88,7 +88,8 @@ def toml_value(v):
 
 
 def description(model):
-    """Identity from the model; display and controls from the faceplate (and later HATs)."""
+    """Identity from the model; display, touch, controls, indicators and sensors from the faceplate
+    (and later HATs)."""
     m = model["model"]
     lines = [f'schema = "{SCHEMA}"', "", "[identity]", 'kind = "board"', f'id = {toml_value(m["id"])}',
              f'name = {toml_value(m["name"])}', f'version = {m["version"]}']
@@ -99,6 +100,9 @@ def description(model):
             lines += ["", "[touch]"] + [f"{k} = {toml_value(v)}" for k, v in layer["touch"].items()]
         for control in layer.get("controls", []):
             lines += ["", "[[controls]]"] + [f"{k} = {toml_value(v)}" for k, v in control.items() if k not in RUNNER_ONLY]
+        for section in ("indicators", "sensors"):
+            for item in layer.get(section, []):
+                lines += ["", f"[[{section}]]"] + [f"{k} = {toml_value(v)}" for k, v in item.items()]
     return "\n".join(lines) + "\n"
 
 
