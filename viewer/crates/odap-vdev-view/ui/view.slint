@@ -52,11 +52,14 @@ component Pill inherits Rectangle {
     // The icon in a square slot at the left, as far from the left edge as from the top and the
     // bottom; the label centred in the space that remains.
     property <length> slot: root.height;
+    // Optical correction: a mark whose weight sits left of its box (a dot in a round end, the
+    // power glyph's open top) is moved right until it reads centred in the slot.
+    in property <length> nudge;
     HorizontalLayout {
         Rectangle {
             width: root.slot;
-            if root.glyph != "": Text { text: root.glyph; color: root.accent && !touch.pressed ? Palette.action : Palette.text; font-size: 14px; vertical-alignment: center; horizontal-alignment: center; }
-            if root.icon.width > 0: Image { source: root.icon; colorize: Palette.text; width: 15px; height: 15px; }
+            if root.glyph != "": Text { x: root.nudge; width: parent.width; text: root.glyph; color: root.accent && !touch.pressed ? Palette.action : Palette.text; font-size: 14px; vertical-alignment: center; horizontal-alignment: center; }
+            if root.icon.width > 0: Image { x: (parent.width - self.width) / 2 + root.nudge; source: root.icon; colorize: Palette.text; width: 15px; height: 15px; }
         }
         VerticalLayout {
             alignment: center;
@@ -466,8 +469,8 @@ export component View inherits Window {
                         spacing: 6px;
                         width: parent.width;
                         Row {
-                            Pill { glyph: "●"; label: "Action"; accent: true; down => { root.key("action", true); } up => { root.key("action", false); } }
-                            Pill { icon: @image-url("icons/power.svg"); label: "Main"; down => { root.key("main", true); } up => { root.key("main", false); } }
+                            Pill { glyph: "●"; nudge: 2px; label: "Action"; accent: true; down => { root.key("action", true); } up => { root.key("action", false); } }
+                            Pill { icon: @image-url("icons/power.svg"); nudge: 2px; label: "Main"; down => { root.key("main", true); } up => { root.key("main", false); } }
                         }
                         Row {
                             Pill { glyph: "+"; label: "Volume"; down => { root.key("volume-up", true); } up => { root.key("volume-up", false); } }

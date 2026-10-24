@@ -30,6 +30,9 @@ pub struct CaseKey {
     pub protrusion_mm: f32,
     pub shape: String,
     pub finish: String,
+    /// A half capsule's round cap at its outer end (`half-up`: the top, `half-down`: the bottom).
+    #[serde(default)]
+    pub cap_radius_mm: f32,
     #[serde(default)]
     pub ribs: u32,
     #[serde(default)]
@@ -162,9 +165,16 @@ fn key_extent(k: &CaseKey, along: f32) -> Option<f32> {
             }
             z
         }
-        // A half capsule: square at the split, its corners eased by the 0.45 mm bevel.
+        // A half capsule: its outer end the capsule's round cap, as the front of the model shows
+        // it (the cap's curve over its radius), its end at the split square, eased by the 0.45 mm
+        // bevel.
         _ => {
-            let edge = 0.45;
+            let outer = match k.shape.as_str() {
+                "half-up" => along > 0.0,
+                "half-down" => along < 0.0,
+                _ => false,
+            };
+            let edge = if outer { k.cap_radius_mm.max(0.45) } else { 0.45 };
             if a > half - edge { e * (1.0 - ((a - (half - edge)) / edge).powi(2)).max(0.0).sqrt() } else { e }
         }
     })

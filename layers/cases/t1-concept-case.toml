@@ -42,6 +42,9 @@ y_mm = 14.7125
 length_mm = 11.375
 protrusion_mm = 1.45
 shape = "half-up"
+# One capsule split in two: each half's outer end is the capsule's round cap (the capsule is
+# 8.6 mm across, so a 4.3 mm radius), its end at the split flat (the concept model).
+cap_radius_mm = 4.3
 finish = "satin-silver"
 mark = "+"
 
@@ -52,6 +55,7 @@ y_mm = 2.0875
 length_mm = 11.375
 protrusion_mm = 1.45
 shape = "half-down"
+cap_radius_mm = 4.3
 finish = "satin-silver"
 mark = "-"
 
