@@ -17,6 +17,13 @@ shape = "rectangle"
 technology = "lcd"
 distance = "handheld"
 
+# The touch panel: QEMU's virtio-multitouch reports positions 0 to 32767 on each axis and tracks
+# 10 slots (QEMU 11.1 include/ui/input.h, INPUT_EVENT_ABS_MAX and INPUT_EVENT_SLOTS_MAX).
+[touch]
+resolution_x = 32768
+resolution_y = 32768
+contacts = 10
+
 # kind, role, Linux code, edge, offset and length in mm, and the QEMU key (qcode) that produces the
 # code, which only the runner uses. The host keys after the buttons share their roles, so the
 # simulator window can be driven from the keyboard.

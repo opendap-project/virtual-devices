@@ -93,6 +93,8 @@ def description(model):
     for layer in layers(model):
         if "display" in layer:
             lines += ["", "[display]"] + [f"{k} = {toml_value(v)}" for k, v in layer["display"].items()]
+        if "touch" in layer:
+            lines += ["", "[touch]"] + [f"{k} = {toml_value(v)}" for k, v in layer["touch"].items()]
         for control in layer.get("controls", []):
             lines += ["", "[[controls]]"] + [f"{k} = {toml_value(v)}" for k, v in control.items() if k not in RUNNER_ONLY]
     return "\n".join(lines) + "\n"
