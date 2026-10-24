@@ -16,6 +16,7 @@ use std::{
 };
 
 use opendap_core::InputSink;
+use opendap_core::hardware::Switch;
 use opendap_core::power::Phase;
 use opendap_model::{Attachment, BootMode, InputEvent, PowerAction, Role};
 use opendap_transport_vm::live::LiveKeys;
@@ -322,6 +323,19 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let jobs = jobs.clone();
         let weak = ui.as_weak();
+        let debug_jobs = jobs.clone();
+        let debug_weak = ui.as_weak();
+        ui.on_set_debug_ui(move |on| {
+            if let Some(ui) = debug_weak.upgrade() {
+                // In flight from the click, as the other switches.
+                match (ui.get_debug_ui(), on) {
+                    (0, true) => ui.set_debug_ui(1),
+                    (2, false) => ui.set_debug_ui(3),
+                    _ => return,
+                }
+            }
+            let _ = debug_jobs.send(device::Job::DebugUi(on));
+        });
         ui.on_attach(move |what, on| {
             let Some(ui) = weak.upgrade() else { return };
             let (a, get, set): (Attachment, fn(&View) -> i32, fn(&View, i32)) = match what.as_str() {
@@ -440,6 +454,12 @@ fn show(ui: &View, st: &device::State) {
         ui.set_battery_seeded(true);
     }
     ui.set_saving(st.saving);
+    ui.set_debug_ui(match st.debug_ui {
+        Switch::Off => 0,
+        Switch::Attaching => 1,
+        Switch::On => 2,
+        Switch::Detaching => 3,
+    });
     ui.set_debug_reboot(st.debug_reboot);
     let phase = match st.phase {
         Phase::Off => "Off",
@@ -448,7 +468,7 @@ fn show(ui: &View, st: &device::State) {
         Phase::Rebooting { .. } => "Restarting…",
         Phase::Stopping => "Powering off…",
     };
-    let busy: Vec<&str> = Attachment::ALL
+    let mut busy: Vec<&str> = Attachment::ALL
         .into_iter()
         .filter(|a| st.switch(*a).busy())
         .map(|a| match a {
@@ -458,12 +478,23 @@ fn show(ui: &View, st: &device::State) {
             Attachment::Charger => "charger",
         })
         .collect();
-    let mut status = phase.to_string();
-    if !busy.is_empty() {
-        status += &format!(" · {}", busy.join(", "));
+    if st.debug_ui.busy() {
+        busy.push("blueprint mode");
     }
-    ui.set_status(status.into());
-    ui.set_note(st.note.clone().into());
+    // The line under the name is the device's state only; what is in flight and the notes go to
+    // the line at the bottom.
+    ui.set_status(phase.into());
+    let mut note = String::new();
+    if !busy.is_empty() {
+        note = busy.join(", ") + "…";
+    }
+    if !st.note.is_empty() {
+        if !note.is_empty() {
+            note += " · ";
+        }
+        note += &st.note;
+    }
+    ui.set_note(note.into());
 }
 
 fn save_png(path: &PathBuf, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {

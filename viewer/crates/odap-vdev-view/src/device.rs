@@ -30,6 +30,8 @@ pub struct State {
     pub phase: Phase,
     /// One switch per [`Attachment::ALL`].
     pub switches: [Switch; 4],
+    /// The debug UI mode, a state of the device's software, read once it answers.
+    pub debug_ui: Switch,
     /// The battery's charge, when the board's battery model answers.
     pub battery: Option<u8>,
     /// A battery change is in flight.
@@ -67,6 +69,7 @@ pub enum Job {
     Attach(Attachment, bool),
     Battery(u8),
     SavePng(PathBuf),
+    DebugUi(bool),
     Power(PowerAction),
 }
 
@@ -125,6 +128,17 @@ impl Run {
         self.state.note_since = Some(Instant::now());
     }
 
+    /// `odap-vdev ui debug [on|off]`: the mode after the change, if any.
+    fn debug_ui(&self, set: Option<bool>) -> Option<bool> {
+        let mut cmd = std::process::Command::new(self.vm.tool());
+        cmd.args(["ui", "debug"]);
+        if let Some(on) = set {
+            cmd.arg(if on { "on" } else { "off" });
+        }
+        let out = cmd.output().ok().filter(|o| o.status.success())?;
+        Some(String::from_utf8_lossy(&out.stdout).trim() == "on")
+    }
+
     fn busy(&self) -> bool {
         self.state.phase.busy() && self.state.phase != Phase::Off
             || self.state.switches.iter().any(|s| s.busy())
@@ -138,7 +152,14 @@ impl Run {
         }
         let st = self.vm.state();
         let (running, answering) = (st != VmState::Stopped, st == VmState::Running);
+        let was_ready = self.state.phase == Phase::Ready;
         self.state.phase.observe(running, answering);
+        // The debug UI mode, read when the device starts answering (a reboot resets it).
+        if answering && !was_ready && self.state.phase == Phase::Ready {
+            if let Some(on) = self.debug_ui(None) {
+                self.state.debug_ui.observe(on);
+            }
+        }
         if let Some(by) = self.power_deadline {
             if !matches!(self.state.phase, Phase::Rebooting { .. } | Phase::Stopping) {
                 self.power_deadline = None;
@@ -250,6 +271,19 @@ impl Run {
                     };
                 self.note(note);
                 self.state.saving = false;
+            }
+            Job::DebugUi(on) => {
+                if self.state.debug_ui.request(on).is_none() {
+                    return;
+                }
+                publish(self.state.clone());
+                match self.debug_ui(Some(on)) {
+                    Some(now) => self.state.debug_ui.observe(now),
+                    None => {
+                        self.state.debug_ui.failed(!on);
+                        self.note("the debug UI mode did not change");
+                    }
+                }
             }
             Job::Power(action) => {
                 // Only a ready device takes one, and only once.

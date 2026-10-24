@@ -42,6 +42,9 @@ def parser():
     s.add_argument("--mode", default="normal", help="normal, debug, or a mode of the board (reboot --list)")
     s.add_argument("--debug", action="store_const", const="debug", dest="mode", help="the same as --mode debug")
     s.add_argument("--list", action="store_true", help="the boot modes the device has")
+    ui = sub.add_parser("ui", help="the device's interface options for development").add_subparsers(dest="action", required=True)
+    s = ui.add_parser("debug", help="the debug UI mode (blueprint), or turn it on or off (the shell restarts)")
+    s.add_argument("state", nargs="?", choices=["on", "off"])
     s = sub.add_parser("hw", help="the virtual hardware's physical state: card, USB, charger, battery")
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("status", help="state and endpoints")
@@ -177,6 +180,13 @@ def run(args):
             for k, v in st["endpoints"].items():
                 print(f"  {k}: {v}")
             print(f"  image: {st['image']['path']} ({'present' if st['image']['present'] else 'missing'})")
+    elif c == "ui":
+        if args.state:
+            # The switch file overrides the board's default; the shell and the activity read it
+            # when they start.
+            inst.ssh(f"echo {1 if args.state == 'on' else 0} > /run/opendap/debug-ui && systemctl restart odap-shell")
+        r = inst.ssh("cat /run/opendap/debug-ui 2>/dev/null || (systemctl show -p Environment odap-shell | grep -q 'ODAP_DEBUG_UI=1' && echo 1 || echo 0)", check=False)
+        print("on" if r.stdout.strip() == "1" else "off")
     elif c == "hw":
         hw = inst.hardware()
         if args.json:
