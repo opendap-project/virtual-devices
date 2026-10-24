@@ -56,7 +56,7 @@ component Pill inherits Rectangle {
     height: root.detail == "" ? 34px : 44px;
     min-width: 0;
     border-radius: root.detail == "" ? 17px : 12px;
-    background: touch.pressed ? (root.accent ? Palette.action : Palette.line.brighter(50%)) : Palette.line;
+    background: touch.pressed ? (root.accent ? Palette.action : Palette.line.brighter(50%)) : (touch.has-hover ? Palette.line.brighter(22%) : Palette.line);
     border-width: 1px;
     border-color: root.accent ? Palette.action.with-alpha(0.7) : #ffffff10;
     HorizontalLayout {
@@ -110,7 +110,9 @@ component Toggle inherits Rectangle {
             }
         }
     }
-    TouchArea { mouse-cursor: pointer; clicked => { root.on = !root.on; root.changed(); } }
+    hover := TouchArea { mouse-cursor: pointer; clicked => { root.on = !root.on; root.changed(); } }
+    background: hover.has-hover ? #ffffff08 : transparent;
+    border-radius: 6px;
 }
 
 // A system action: an icon button, its label below it, outside the button, so a longer label
@@ -124,7 +126,7 @@ component Tool inherits VerticalLayout {
     Rectangle {
         height: 40px;
         border-radius: 8px;
-        background: touch.pressed ? Palette.line.brighter(50%) : Palette.line;
+        background: touch.pressed ? Palette.line.brighter(50%) : (touch.has-hover ? Palette.line.brighter(22%) : Palette.line);
         accessible-role: button;
         accessible-label: root.label;
         accessible-action-default => { root.clicked(); }
@@ -282,7 +284,10 @@ export component View inherits Window {
                             background: #00000040;
                         }
                     }
-                    TouchArea {
+                    // Hovered by the mouse: a faint light on the key.
+                    if key-touch.has-hover && !k.pressed: Rectangle { background: #ffffff30; border-radius: parent.border-top-left-radius; }
+                    key-touch := TouchArea {
+                        mouse-cursor: pointer;
                         pointer-event(e) => {
                             if e.kind == PointerEventKind.down { root.key(k.role, true); }
                             if e.kind == PointerEventKind.up || e.kind == PointerEventKind.cancel { root.key(k.role, false); }
@@ -320,8 +325,8 @@ export component View inherits Window {
                 y: 8px;
                 width: 22px;
                 height: 32px;
-                Text { text: root.sidebar ? "›" : "‹"; color: Palette.muted; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
-                TouchArea { mouse-cursor: pointer; clicked => { root.sidebar = !root.sidebar; } }
+                Text { text: root.sidebar ? "›" : "‹"; color: grip.has-hover ? Palette.text : Palette.muted; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
+                grip := TouchArea { mouse-cursor: pointer; clicked => { root.sidebar = !root.sidebar; } }
             }
             if root.sidebar: VerticalLayout {
                 x: 22px;
