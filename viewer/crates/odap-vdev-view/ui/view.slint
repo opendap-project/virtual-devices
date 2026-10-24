@@ -303,6 +303,9 @@ export component View inherits Window {
     in-out property <float> battery: 50;
     in property <bool> battery-known;
     in property <bool> battery-busy;
+    // The charge as the hardware reports it: the readout follows the output, while the slider
+    // sends the input without waiting for it.
+    in property <int> battery-read: -1;
     in-out property <bool> battery-dragging;
     in property <int> charger;
     in property <int> sd;
@@ -346,8 +349,8 @@ export component View inherits Window {
                 else if e.text == "2" { root.attach("usb-storage", root.usb-disk == 0); }
                 else if e.text == "3" { root.attach("usb-audio", root.usb-dac == 0); }
                 else if e.text == "4" && root.battery-known { root.attach("charger", root.charger == 0); }
-                else if (e.text == "-" || e.text == "[") && root.battery-known && !root.battery-busy { root.battery = max(0, round(root.battery) - 5); root.battery-set(root.battery); }
-                else if (e.text == "=" || e.text == "+" || e.text == "]") && root.battery-known && !root.battery-busy { root.battery = min(100, round(root.battery) + 5); root.battery-set(root.battery); }
+                else if (e.text == "-" || e.text == "[") && root.battery-known { root.battery = max(0, round(root.battery) - 5); root.battery-set(root.battery); }
+                else if (e.text == "=" || e.text == "+" || e.text == "]") && root.battery-known { root.battery = min(100, round(root.battery) + 5); root.battery-set(root.battery); }
                 else if e.text == "\\" { root.sidebar = !root.sidebar; }
                 else { return reject; }
                 return accept;
@@ -533,13 +536,15 @@ export component View inherits Window {
                     HorizontalLayout {
                         spacing: 8px;
                         Image { source: @image-url("icons/battery.svg"); colorize: Palette.text; width: 16px; height: 16px; y: (parent.height - self.height) / 2; }
-                        Text { text: round(root.battery) + " %"; color: Palette.text; font-size: 12px; vertical-alignment: center; min-width: 34px; }
+                        Text { text: root.battery-read < 0 ? "– %" : root.battery-read + " %"; color: Palette.text; font-size: 12px; vertical-alignment: center; min-width: 34px; }
                         Slider {
                             minimum: 0;
                             maximum: 100;
-                            enabled: root.battery-known && !root.battery-busy;
+                            // Fire and forget: every change is sent as it is made, never waiting for
+                            // the last; the worker applies the latest (device.rs).
+                            enabled: root.battery-known;
                             value <=> root.battery;
-                            changed => { root.battery-dragging = true; }
+                            changed => { root.battery-dragging = true; root.battery-set(root.battery); }
                             released => { root.battery-dragging = false; root.battery-set(root.battery); keys-in.focus(); }
                         }
                     }

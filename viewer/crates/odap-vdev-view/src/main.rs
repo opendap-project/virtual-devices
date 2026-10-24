@@ -424,6 +424,7 @@ fn show(ui: &View, st: &device::State) {
     ui.set_charger(st.code(Attachment::Charger));
     ui.set_battery_known(st.battery.is_some());
     ui.set_battery_busy(st.battery_busy);
+    ui.set_battery_read(st.battery.map(i32::from).unwrap_or(-1));
     if let Some(p) = st.battery
         && !ui.get_battery_dragging()
     {

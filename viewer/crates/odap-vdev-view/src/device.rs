@@ -166,9 +166,8 @@ impl Run {
                         self.note(format!("the hardware did not take the {a} change"));
                     }
                 }
-                if !self.state.battery_busy {
-                    self.state.battery = hw.battery;
-                }
+                // What the hardware reports, always: the window's readout follows it.
+                self.state.battery = hw.battery;
             }
             Err(e) => self.note(e.message),
         }
@@ -181,10 +180,19 @@ impl Run {
             let wait = if self.busy() { POLL_BUSY } else { POLL_IDLE };
             match rx.recv_timeout(wait) {
                 Ok(job) => {
-                    self.job(job, &publish);
                     // Whatever else is queued was asked with the state the window had then; the
-                    // state machines drop what no longer applies.
-                    while let Ok(job) = rx.try_recv() {
+                    // state machines drop what no longer applies. Values sent fire-and-forget (the
+                    // battery) keep only the latest.
+                    let mut queue: Vec<Job> = std::iter::once(job).chain(rx.try_iter()).collect();
+                    if let Some(last) = queue.iter().rposition(|j| matches!(j, Job::Battery(_))) {
+                        let mut i = 0;
+                        queue.retain(|j| {
+                            let keep = !matches!(j, Job::Battery(_)) || i == last;
+                            i += 1;
+                            keep
+                        });
+                    }
+                    for job in queue {
                         self.job(job, &publish);
                     }
                 }
@@ -219,8 +227,6 @@ impl Run {
             }
             Job::Battery(percent) => {
                 self.state.battery_busy = true;
-                self.state.battery = Some(percent);
-                publish(self.state.clone());
                 let change = HardwareChange::Battery { percent };
                 if let Err(e) = hardware::change(&self.vm, self.target.clone(), change, false) {
                     self.note(e.message);
