@@ -65,7 +65,8 @@ color = "#050505"
 [[indicators]]
 role = "status"
 colors = "rgb"
-linux = "thingm0"
+# hid-led numbers its devices and never reuses a number, so the board names it by prefix.
+linux = "thingm*"
 
 [[sensors]]
 kind = "ambient-light"
