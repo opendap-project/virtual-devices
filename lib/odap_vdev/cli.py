@@ -129,7 +129,7 @@ def run(args):
         elif os.environ.get("ODAP_NET") == "user":
             net = "off (ODAP_NET=user; management link only)"
         else:
-            net = "none (management link only; toolkit-host odap-vmnet install)"
+            net = "none (management link only; toolkit-host odapkit-vmnet install)"
         print(f"{inst.name} started; LAN: {net}")
         if args.wait and not inst.wait_ssh():
             raise InstanceError("the management link did not answer")

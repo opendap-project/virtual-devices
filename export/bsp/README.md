@@ -1,6 +1,6 @@
 # Virtual board support package
 
-What a Blackbird OS image adds and trims to run on the virtual board (system hardware support spec §5: one board support package per board; blackbird-os OS-004). It is a mkosi configuration directory: toolkit-image `odap-image build qemu` includes it (`mkosi --include=export/bsp`).
+What a Blackbird OS image adds and trims to run on the virtual board (system hardware support spec §5: one board support package per board; blackbird-os OS-004). It is a mkosi configuration directory: toolkit-image `odapkit image build qemu` includes it (`mkosi --include=export/bsp`).
 
 ## `mkosi.conf`
 

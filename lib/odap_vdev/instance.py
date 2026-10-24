@@ -51,9 +51,18 @@ class Instance:
     def disk(self): return self.state / "disk.qcow2"
 
     def image(self):
+        """The Blackbird OS qemu image (rfcs 0009): ODAP_IMAGE; else a blackbird-os checkout's build
+        output, when there is one (a maintainer's latest build); else the user's images, where
+        released images go. Users need no toolkit and no checkout."""
         if os.environ.get("ODAP_IMAGE"):
             return pathlib.Path(os.environ["ODAP_IMAGE"]).expanduser()
-        return workspace.repo_dir("blackbird-os") / "image/mkosi.output/blackbird-os-qemu.raw"
+        try:
+            built = workspace.repo_dir("blackbird-os") / "image/mkosi.output/blackbird-os-qemu.raw"
+            if built.is_file() or built.with_name(built.name + ".building").exists():
+                return built
+        except workspace.NotFound:
+            pass
+        return USER_IMAGES / "blackbird-os-qemu.raw"
 
     def pid(self):
         try:
@@ -81,7 +90,9 @@ class Instance:
                 "vnc": f"127.0.0.1:{5900 + self.vnc_display}",
                 "qmp": str(self.qmp_socket),
             },
-            "image": {"path": image, "present": image_present},
+            # building: a toolkit is rebuilding it (its <image>.building marker, rfcs 0009).
+            "image": {"path": image, "present": image_present,
+                      "building": pathlib.Path(image + ".building").exists()},
             "dev_key": str(workspace.dev_key()),
             "console_log": str(self.console_log),
             "qemu_log": str(self.qemu_log),
@@ -106,7 +117,7 @@ class Instance:
             raise InstanceError(f"{self.name} is already running (pid {self.pid()})")
         image = self.image()
         if not image.is_file():
-            raise InstanceError(f"no image at {image}: build it with toolkit-image odap-image build qemu")
+            raise InstanceError(f"no image at {image}: build it with toolkit-image odapkit-image build qemu")
         self.state.mkdir(parents=True, exist_ok=True)
         base_file = self.state / "disk.base"
         if not self.disk.exists() or image.stat().st_mtime > self.disk.stat().st_mtime or \
@@ -220,7 +231,7 @@ class Instance:
 
     def _lan_prefix(self, qemu):
         """`qemu` is the command that runs QEMU (its launcher words, then the program)."""
-        """The LAN NIC through socket_vmnet when it runs (toolkit-host odap-vmnet): QEMU is
+        """The LAN NIC through socket_vmnet when it runs (toolkit-host odapkit-vmnet): QEMU is
         started by socket_vmnet_client, which passes the connection as fd 3."""
         if os.environ.get("ODAP_NET") == "user":
             return list(qemu), None
@@ -232,6 +243,10 @@ class Instance:
         if client and sock:
             return [client, sock, *qemu, "-netdev", "socket,id=lan,fd=3", "-device", "virtio-net-pci,netdev=lan,mac=52:54:00:0d:a1:01"], sock
         return list(qemu), None
+
+
+# Where a user's images are, without a toolkit or a blackbird-os checkout.
+USER_IMAGES = pathlib.Path(os.environ.get("XDG_DATA_HOME", pathlib.Path.home() / ".local/share")) / "opendap/images"
 
 
 def window_on_top_library():

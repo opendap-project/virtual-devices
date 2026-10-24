@@ -45,7 +45,8 @@ def state_dir(model):
 
 
 def dev_key():
-    """The development SSH key that qemu images accept (toolkit-image odap-dev-key)."""
+    """The user's SSH key for virtual devices: ODAP_DEV_KEY, else ~/.local/share/opendap/dev-ssh.
+    Maintainers' images trust it (odapkit dev-key creates it); device pairing will add it to others."""
     if os.environ.get("ODAP_DEV_KEY"):
         return pathlib.Path(os.environ["ODAP_DEV_KEY"]).expanduser()
     base = pathlib.Path(os.environ.get("XDG_DATA_HOME", pathlib.Path.home() / ".local/share"))
